@@ -13,13 +13,17 @@ public class RequestResources  {
 
     public static class Request extends Message {
 
+        private final long jobId;
         private final int numCpus;
         private final int amountMemInMb;
+        private final int timeToHold;
 
-        public Request(Address source, Address destination, int numCpus, int amountMemInMb) {
+        public Request(Address source, Address destination, long jobId, int numCpus, int amountMemInMb, int timeToHold) {
             super(source, destination);
+            this.jobId = jobId;
             this.numCpus = numCpus;
             this.amountMemInMb = amountMemInMb;
+            this.timeToHold = timeToHold;
         }
 
         public int getAmountMemInMb() {
@@ -30,14 +34,36 @@ public class RequestResources  {
             return numCpus;
         }
 
+        @Override
+        public String toString() {
+            return getNumCpus() + " + " + getAmountMemInMb();
+        }
+
+        public long getJobId() {
+            return jobId;
+        }
+
+        public int getTimeToHold() {
+            return timeToHold;
+        }
     }
     
     public static class Response extends Message {
 
         private final boolean success;
-        public Response(Address source, Address destination, boolean success) {
+        private final long jobId;
+        public Response(Address source, Address destination, boolean success, long jobId) {
             super(source, destination);
             this.success = success;
+            this.jobId = jobId;
+        }
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public long getJobId() {
+            return jobId;
         }
     }
     

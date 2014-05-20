@@ -47,14 +47,11 @@ public final class DataCenterSimulationMain extends ComponentDefinition {
         final TManConfiguration tmanConfig = TManConfiguration.load(System.getProperty("tman.configuration"));
         final RmConfiguration rmConfig = RmConfiguration.load(System.getProperty("rm.configuration"));
 
-        trigger(new SimulatorInit(bootConfig, cyclonConfig, tmanConfig,
-                rmConfig), rmSimulator.getControl());
-        trigger(new P2pSimulatorInit(simulatorScheduler, scenario, new KingLatencyMap()), 
-                p2pSimulator.getControl());
+        trigger(new SimulatorInit(bootConfig, cyclonConfig, tmanConfig, rmConfig), rmSimulator.getControl());
+        trigger(new P2pSimulatorInit(simulatorScheduler, scenario, new KingLatencyMap()), p2pSimulator.getControl());
         trigger(new BootstrapServerInit(bootConfig), bootstrapServer.getControl());
 
-        connect(bootstrapServer.getNegative(Network.class), p2pSimulator.getPositive(Network.class), 
-                new MessageDestinationFilter(bootConfig.getBootstrapServerAddress()));
+        connect(bootstrapServer.getNegative(Network.class), p2pSimulator.getPositive(Network.class), new MessageDestinationFilter(bootConfig.getBootstrapServerAddress()));
         connect(bootstrapServer.getNegative(Timer.class), p2pSimulator.getPositive(Timer.class));
         connect(rmSimulator.getNegative(Network.class), p2pSimulator.getPositive(Network.class));
         connect(rmSimulator.getNegative(Timer.class), p2pSimulator.getPositive(Timer.class));

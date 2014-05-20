@@ -69,9 +69,6 @@ public final class PeerDescriptor extends OverlayAddress implements Comparable<P
             return false;
         }
         PeerDescriptor other = (PeerDescriptor) obj;
-        if (id() != other.id()) {
-            return false;
-        }
-        return true;
+        return id() == other.id();
     }
 }
