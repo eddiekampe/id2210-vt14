@@ -9,4 +9,5 @@ public class SimulatorPort extends PortType {{
 	positive(RequestResource.class);
 	positive(TerminateExperiment.class);
 	negative(TerminateExperiment.class);
+    // Could add other types of event, like release resource
 }}

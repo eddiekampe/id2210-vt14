@@ -35,8 +35,7 @@ public final class Cyclon extends ComponentDefinition {
 	private boolean joining;
 	private CyclonConfiguration cyclonConfiguration;
 	private HashMap<UUID, Address> outstandingRandomShuffles;
-
-        private AvailableResources availableResources;
+    private AvailableResources availableResources;
 	
 	public Cyclon() {
 		outstandingRandomShuffles = new HashMap<UUID, Address>();
@@ -129,7 +128,7 @@ public final class Cyclon extends ComponentDefinition {
 			
 			if (randomPeer != null) {
 				initiateShuffle(shuffleLength, randomPeer);
-                                trigger(new CyclonSample(getPartners()), samplePort);
+                trigger(new CyclonSample(getPartners()), samplePort);
 			}
 		}
 	};

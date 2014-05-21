@@ -23,6 +23,7 @@ import se.sics.kompics.timer.ScheduleTimeout;
 import se.sics.kompics.timer.Timeout;
 import se.sics.kompics.timer.Timer;
 
+import tman.simulator.snapshot.PeerInfo;
 import tman.simulator.snapshot.Snapshot;
 
 public final class TMan extends ComponentDefinition {
@@ -91,7 +92,13 @@ public final class TMan extends ComponentDefinition {
         public void handle(CyclonSample event) {
             List<Address> cyclonPartners = event.getSample();
 
-            // merge cyclonPartners into TManPartners
+            // Merge cyclonPartners into TManPartners
+            Snapshot.updateCyclonPartners(self, (ArrayList<Address>) cyclonPartners);
+            for (Address partner : cyclonPartners) {
+                if (!tmanPartners.contains(partner)) {
+                    tmanPartners.add(partner);
+                }
+            }
         }
     };
 

@@ -32,4 +32,19 @@ public final class RequestResource extends Event {
         return numCpus;
     }
 
+    @Override
+    public boolean equals(Object o) {
+
+        if (this == o) return true;
+        if (!(o instanceof RequestResource)) return false;
+
+        RequestResource that = (RequestResource) o;
+
+        return id == that.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return (int) (id ^ (id >>> 32));
+    }
 }
