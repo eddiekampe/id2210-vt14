@@ -5,7 +5,6 @@ import common.peer.AvailableResources;
 import common.simulation.RequestResource;
 import cyclon.system.peer.cyclon.CyclonSample;
 import cyclon.system.peer.cyclon.CyclonSamplePort;
-import cyclon.system.peer.cyclon.PeerDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.sics.kompics.ComponentDefinition;
@@ -34,6 +33,7 @@ public final class ResourceManager extends ComponentDefinition {
     private static final Logger logger = LoggerFactory.getLogger(ResourceManager.class);
     private static final int nPeersToProbe = 4;
     private static final int reservedTimeout = 1000;
+    private static boolean useImprovedSparrow;
 
     Positive<RmPort> indexPort = positive(RmPort.class);
     Positive<Network> networkPort = positive(Network.class);
@@ -49,18 +49,6 @@ public final class ResourceManager extends ComponentDefinition {
     private AvailableResources availableResources;
     private Map<RequestResource, PendingJob> ongoingJobs;
     private List<RequestResource> jobList;
-
-
-    Comparator<PeerDescriptor> peerAgeComparator = new Comparator<PeerDescriptor>() {
-        @Override
-        public int compare(PeerDescriptor t, PeerDescriptor t1) {
-            if (t.getAge() > t1.getAge()) {
-                return 1;
-            } else {
-                return -1;
-            }
-        }
-    };
 
     /**
      * Bind handlers to ports.
@@ -92,6 +80,7 @@ public final class ResourceManager extends ComponentDefinition {
             ongoingJobs = new HashMap<RequestResource, PendingJob>();
             self = init.getSelf();
             configuration = init.getConfiguration();
+            useImprovedSparrow = configuration.useImprovedSparrow();
             random = new Random(init.getConfiguration().getSeed());
             availableResources = init.getAvailableResources();
             jobList = new ArrayList<RequestResource>();
@@ -128,9 +117,11 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(CyclonSample event) {
 
-            System.out.println("Received samples: " + event.getSample().size());
-            neighbours.clear();
-            neighbours.addAll(event.getSample());
+            if (!useImprovedSparrow) {
+                //System.out.println("Received samples: " + event.getSample().size());
+                neighbours.clear();
+                neighbours.addAll(event.getAddressSample());
+            }
         }
     };
 
@@ -141,8 +132,12 @@ public final class ResourceManager extends ComponentDefinition {
     Handler<TManSample> handleTManSample = new Handler<TManSample>() {
         @Override
         public void handle(TManSample event) {
-            System.out.println("handleTManSample");
-            // TODO:
+
+            if (useImprovedSparrow) {
+                //System.out.println("TManSample: " + event.getSample().size());
+                neighbours.clear();
+                neighbours.addAll(event.getAddressSample());
+            }
         }
     };
 
@@ -316,7 +311,7 @@ public final class ResourceManager extends ComponentDefinition {
 
         switch (responseStatus) {
             case -1: // All Nack
-                System.out.println(jobId + ": All Nack!!!!");
+                //System.out.println(jobId + ": All Nack!!!!");
                 ongoingJobs.remove(requestResource);
                 // No worker acked the probe, try to reschedule the job
                 scheduleJob(requestResource);
@@ -325,7 +320,7 @@ public final class ResourceManager extends ComponentDefinition {
                 //System.out.println(jobId + ": Not enough responses!!!!");
                 break;
             case 1: // At least one Ack
-                System.out.println(jobId + ": At least one Ack!!!!");
+                //System.out.println(jobId + ": At least one Ack!!!!");
                 Address bestWorker = pendingJob.getBestWorker();
                 int numCpus = requestResource.getNumCpus();
                 int memoryInMbs = requestResource.getMemoryInMbs();
@@ -353,9 +348,13 @@ public final class ResourceManager extends ComponentDefinition {
         int memoryInMbs = jobEvent.getMemoryInMbs();
         int numCpus = jobEvent.getNumCpus();
 
-        Collections.shuffle(neighbours);
-        List<Address> addresses = new LinkedList<Address>();
+        if (useImprovedSparrow) {
+            // Check if job can be executed
+        } else {
+            Collections.shuffle(neighbours);
+        }
 
+        List<Address> addresses = new LinkedList<Address>();
         for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
 
             //System.out.println("Sending Probe.Request");

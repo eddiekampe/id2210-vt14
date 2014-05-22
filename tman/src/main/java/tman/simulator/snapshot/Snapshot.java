@@ -2,6 +2,8 @@ package tman.simulator.snapshot;
 
 import java.util.ArrayList;
 import java.util.TreeMap;
+
+import cyclon.system.peer.cyclon.PeerDescriptor;
 import se.sics.kompics.address.Address;
 
 
@@ -26,17 +28,17 @@ public class Snapshot {
 	}
 
 
-	public static void updateTManPartners(Address address, ArrayList<Address> partners) {
+	public static void updateTManPartners(Address address, ArrayList<PeerDescriptor> partners) {
 		PeerInfo peerInfo = peers.get(address);
 		
 		if (peerInfo == null)
 			return;
-		
+
 		peerInfo.updateTManPartners(partners);
 	}
 	
 
-	public static void updateCyclonPartners(Address address, ArrayList<Address> partners) {
+	public static void updateCyclonPartners(Address address, ArrayList<PeerDescriptor> partners) {
 		PeerInfo peerInfo = peers.get(address);
 		
 		if (peerInfo == null)

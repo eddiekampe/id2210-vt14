@@ -1,6 +1,5 @@
 package common.configuration;
 
-import common.simulation.scenarios.Scenario;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -14,19 +13,22 @@ public final class RmConfiguration {
     private final int numPartitions;
     private final int maxNumRoutingEntries;
     private final long seed;
+    private final boolean useImprovedSparrow;
 
-    public RmConfiguration(long seed) {
+    public RmConfiguration(long seed, boolean useImprovedSparrow) {
         this.period = 2*1000;
         this.numPartitions = 10;
         this.maxNumRoutingEntries = 20;
         this.seed = seed;
+        this.useImprovedSparrow = useImprovedSparrow;
     }
     
-    public RmConfiguration(long period, int numPartitions, int maxNumRoutingEntries, long seed) {
+    public RmConfiguration(long period, int numPartitions, int maxNumRoutingEntries, long seed, boolean useImprovedSparrow) {
         this.period = period;
         this.numPartitions = numPartitions;
         this.maxNumRoutingEntries = maxNumRoutingEntries;
         this.seed = seed;
+        this.useImprovedSparrow = useImprovedSparrow;
     }
 
     public long getPeriod() {
@@ -44,6 +46,10 @@ public final class RmConfiguration {
     public long getSeed() {
         return seed;
     }
+
+    public boolean useImprovedSparrow() {
+        return useImprovedSparrow;
+    }
     
     public void store(String file) throws IOException {
         Properties p = new Properties();
@@ -51,6 +57,7 @@ public final class RmConfiguration {
         p.setProperty("numPartitions", "" + numPartitions);
         p.setProperty("maxNumRoutingEntries", "" + maxNumRoutingEntries);
         p.setProperty("seed", "" + seed);
+        p.setProperty("useImprovedSparrow", "" + useImprovedSparrow);
 
         Writer writer = new FileWriter(file);
         p.store(writer, "se.sics.kompics.p2p.overlay.application");
@@ -65,7 +72,8 @@ public final class RmConfiguration {
         int numPartitions = Integer.parseInt(p.getProperty("numPartitions"));
         int maxNumRoutingEntries = Integer.parseInt(p.getProperty("maxNumRoutingEntries"));
         long seed = Long.parseLong(p.getProperty("seed"));
+        boolean improvedSparrow = Boolean.parseBoolean(p.getProperty("useImprovedSparrow"));
 
-        return new RmConfiguration(period, numPartitions, maxNumRoutingEntries, seed);
+        return new RmConfiguration(period, numPartitions, maxNumRoutingEntries, seed, improvedSparrow);
     }
 }

@@ -8,19 +8,29 @@ public class PeerDescriptor implements Comparable<PeerDescriptor>, Serializable 
 	private static final long serialVersionUID = 1906679375438244117L;
 	private final Address peerAddress;
 	private int age;
+    private final int numFreeCpus;
+    private final int freeMemoryInMbs;
 
 
-	public PeerDescriptor(Address peerAddress) {
+	public PeerDescriptor(Address peerAddress, int numFreeCpus, int freeMemoryInMbs) {
 		this.peerAddress = peerAddress;
-		this.age = 0;
+        this.numFreeCpus = numFreeCpus;
+        this.freeMemoryInMbs = freeMemoryInMbs;
+        this.age = 0;
 	}
 
+    public int getNumFreeCpus() {
+        return numFreeCpus;
+    }
+
+    public int getFreeMemoryInMbs() {
+        return freeMemoryInMbs;
+    }
 
 	public int incrementAndGetAge() {
 		age++;
 		return age;
 	}
-
 
 	public int getAge() {
 		return age;
@@ -34,13 +44,20 @@ public class PeerDescriptor implements Comparable<PeerDescriptor>, Serializable 
 
 	@Override
 	public int compareTo(PeerDescriptor that) {
-		if (this.age > that.age)
+        if (this.age > that.age)
 			return 1;
 		if (this.age < that.age)
 			return -1;
 		return 0;
 	}
 
+    public PeerDescriptor compareAndGetNewest(PeerDescriptor that) {
+        if (this.age > that.age) {
+            return that;
+        } else {
+            return this;
+        }
+    }
 
 	@Override
 	public int hashCode() {
@@ -71,7 +88,6 @@ public class PeerDescriptor implements Comparable<PeerDescriptor>, Serializable 
 
 	@Override
 	public String toString() {
-		return peerAddress + "";
+		return peerAddress + "" + "(" + numFreeCpus + " + " + freeMemoryInMbs + ")";
 	}
-	
 }

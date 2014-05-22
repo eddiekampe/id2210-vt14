@@ -156,7 +156,7 @@ public final class DataCenterSimulator extends ComponentDefinition {
         connect(timer, peer.getNegative(Timer.class));
         
         AvailableResources ar = new AvailableResources(numCpus, memInMb);
-        trigger(new PeerInit(address, bootstrapConfiguration, cyclonConfiguration, 
+        trigger(new PeerInit(address, bootstrapConfiguration, cyclonConfiguration, tmanConfiguration,
                 rmConfiguration, ar), peer.getControl());
 
         trigger(new Start(), peer.getControl());

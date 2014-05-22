@@ -30,12 +30,12 @@ public class Configuration {
     TManConfiguration tmanConfiguration;
     RmConfiguration searchConfiguration;
 
-    public Configuration(long seed) throws IOException {
+    public Configuration(long seed, boolean useImprovedSparrow) throws IOException {
+
         this.seed = seed;
-        searchConfiguration = new RmConfiguration(seed);
+        searchConfiguration = new RmConfiguration(seed, useImprovedSparrow);
         tmanConfiguration = new TManConfiguration(seed, 1000, 0.8);
-        cyclonConfiguration = new CyclonConfiguration(seed, 5, 10, 1000, 500000,
-                (long) (Integer.MAX_VALUE - Integer.MIN_VALUE), 20);
+        cyclonConfiguration = new CyclonConfiguration(seed, 5, 10, 1000, 500000, (long) (Integer.MAX_VALUE - Integer.MIN_VALUE), 20);
 
         String c = File.createTempFile("bootstrap.", ".conf").getAbsolutePath();
         bootConfiguration.store(c);
