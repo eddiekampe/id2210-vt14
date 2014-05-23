@@ -26,4 +26,9 @@ public class ReleaseAllocatedResources extends Timeout {
     public int getMemInMb() {
         return memInMb;
     }
+
+    @Override
+    public String toString() {
+        return "(" + numCpus + ", " + memInMb + ")";
+    }
 }

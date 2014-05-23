@@ -28,6 +28,7 @@ import tman.simulator.snapshot.Snapshot;
 public final class TMan extends ComponentDefinition {
 
     private static final Logger logger = LoggerFactory.getLogger(TMan.class);
+    private static final int C = 8;
 
     Negative<TManSamplePort> tmanPort = negative(TManSamplePort.class);
     Positive<CyclonSamplePort> cyclonSamplePort = positive(CyclonSamplePort.class);
@@ -154,7 +155,11 @@ public final class TMan extends ComponentDefinition {
             //System.out.println("ExchangeMsg.Response");
             Set<PeerDescriptor> buffer;
             buffer = merge(event.getBuffer(), tmanPartners);
-            tmanPartners = new HashSet<PeerDescriptor>(buffer);
+
+            // Sort and keep C highest peers
+            List<PeerDescriptor> sortedPeers = new ArrayList<PeerDescriptor>(buffer);
+            Collections.sort(sortedPeers, new ComparatorByMix());
+            tmanPartners = new HashSet<PeerDescriptor>(sortedPeers.subList(0, Math.min(C, sortedPeers.size())));
         }
     };
 

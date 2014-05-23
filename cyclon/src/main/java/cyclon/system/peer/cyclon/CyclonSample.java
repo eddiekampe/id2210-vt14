@@ -11,7 +11,7 @@ import java.util.Set;
 
 public class CyclonSample extends Event {
 
-    Set<PeerDescriptor> nodes = new HashSet<PeerDescriptor>();
+    private Set<PeerDescriptor> nodes = new HashSet<PeerDescriptor>();
 
 	public CyclonSample(List<PeerDescriptor> nodes) {
 		this.nodes = new HashSet<PeerDescriptor>(nodes);

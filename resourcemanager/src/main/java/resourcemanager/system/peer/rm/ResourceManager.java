@@ -5,6 +5,7 @@ import common.peer.AvailableResources;
 import common.simulation.RequestResource;
 import cyclon.system.peer.cyclon.CyclonSample;
 import cyclon.system.peer.cyclon.CyclonSamplePort;
+import cyclon.system.peer.cyclon.PeerDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.sics.kompics.ComponentDefinition;
@@ -43,7 +44,7 @@ public final class ResourceManager extends ComponentDefinition {
     Positive<TManSamplePort> tmanPort = positive(TManSamplePort.class);
 
     private Address self;
-    private ArrayList<Address> neighbours = new ArrayList<Address>();
+    private ArrayList<PeerDescriptor> neighbours = new ArrayList<PeerDescriptor>();
     private Random random;
     private RmConfiguration configuration;
     private AvailableResources availableResources;
@@ -105,7 +106,7 @@ public final class ResourceManager extends ComponentDefinition {
             if (neighbours.isEmpty()) {
                 return;
             }
-            Address dest = neighbours.get(random.nextInt(neighbours.size()));
+            PeerDescriptor dest = neighbours.get(random.nextInt(neighbours.size()));
         }
     };
 
@@ -120,7 +121,7 @@ public final class ResourceManager extends ComponentDefinition {
             if (!useImprovedSparrow) {
                 //System.out.println("Received samples: " + event.getSample().size());
                 neighbours.clear();
-                neighbours.addAll(event.getAddressSample());
+                neighbours.addAll(event.getSample());
             }
         }
     };
@@ -136,7 +137,7 @@ public final class ResourceManager extends ComponentDefinition {
             if (useImprovedSparrow) {
                 //System.out.println("TManSample: " + event.getSample().size());
                 neighbours.clear();
-                neighbours.addAll(event.getAddressSample());
+                neighbours.addAll(event.getSample());
             }
         }
     };
@@ -253,7 +254,7 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(ReleaseAllocatedResources releaseEvent) {
             availableResources.release(releaseEvent.getNumCpus(), releaseEvent.getMemInMb());
-            System.out.println("release allocated resources ");
+            System.out.println("Release allocated resources: " + releaseEvent);
         }
     };
 
@@ -347,22 +348,31 @@ public final class ResourceManager extends ComponentDefinition {
         long jobId = jobEvent.getId();
         int memoryInMbs = jobEvent.getMemoryInMbs();
         int numCpus = jobEvent.getNumCpus();
+        List<Address> addresses = new LinkedList<Address>();
 
         if (useImprovedSparrow) {
             // Check if job can be executed
+            for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
+
+                System.out.println("Neighbour " + i + ": " + neighbours.get(i));
+                //System.out.println("Sending Probe.Request");
+                PeerDescriptor neighbour = neighbours.get(i);
+                addresses.add(neighbour.getAddress());
+
+                Probe.Request request = new Probe.Request(self, neighbour.getAddress(), jobId, numCpus, memoryInMbs);
+                trigger(request, networkPort);
+            }
         } else {
-            Collections.shuffle(neighbours);
-        }
+            //Collections.shuffle(neighbours);
+            for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
 
-        List<Address> addresses = new LinkedList<Address>();
-        for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
+                //System.out.println("Sending Probe.Request");
+                PeerDescriptor neighbour = neighbours.get(i);
+                addresses.add(neighbour.getAddress());
 
-            //System.out.println("Sending Probe.Request");
-            Address neighbour = neighbours.get(i);
-            addresses.add(neighbour);
-
-            Probe.Request request = new Probe.Request(self, neighbour, jobId, numCpus, memoryInMbs);
-            trigger(request, networkPort);
+                Probe.Request request = new Probe.Request(self, neighbour.getAddress(), jobId, numCpus, memoryInMbs);
+                trigger(request, networkPort);
+            }
         }
 
         ongoingJobs.put(jobEvent, new PendingJob(addresses));

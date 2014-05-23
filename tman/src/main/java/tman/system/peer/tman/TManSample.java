@@ -10,7 +10,7 @@ import se.sics.kompics.address.Address;
 
 public class TManSample extends Event {
 
-    Set<PeerDescriptor> nodes = new HashSet<PeerDescriptor>();
+    private Set<PeerDescriptor> nodes = new HashSet<PeerDescriptor>();
 
 	public TManSample(Set<PeerDescriptor> partners) {
 		this.nodes = partners;
@@ -20,9 +20,7 @@ public class TManSample extends Event {
 
 
 	public List<PeerDescriptor> getSample() {
-        List<PeerDescriptor> sortedPeers = new ArrayList<PeerDescriptor>(nodes);
-        Collections.sort(sortedPeers, new ComparatorByMix());
-		return sortedPeers;
+        return new ArrayList<PeerDescriptor>(nodes);
 	}
 
     public ArrayList<Address> getAddressSample() {
