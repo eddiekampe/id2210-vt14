@@ -10,9 +10,9 @@ import se.sics.kompics.address.Address;
 
 public class TManSample extends Event {
 
-    private Set<PeerDescriptor> nodes = new HashSet<PeerDescriptor>();
+    private List<PeerDescriptor> nodes = new ArrayList<PeerDescriptor>();
 
-	public TManSample(Set<PeerDescriptor> partners) {
+	public TManSample(List<PeerDescriptor> partners) {
 		this.nodes = partners;
 	}
         

@@ -32,7 +32,7 @@ import java.util.*;
 public final class ResourceManager extends ComponentDefinition {
 
     private static final Logger logger = LoggerFactory.getLogger(ResourceManager.class);
-    private static final int nPeersToProbe = 4;
+    private static final int nPeersToProbe = 10;
     private static final int reservedTimeout = 1000;
     private static boolean useImprovedSparrow;
 
@@ -119,7 +119,7 @@ public final class ResourceManager extends ComponentDefinition {
         public void handle(CyclonSample event) {
 
             if (!useImprovedSparrow) {
-                //System.out.println("Received samples: " + event.getSample().size());
+                logger.debug("Received samples: " + event.getSample().size());
                 neighbours.clear();
                 neighbours.addAll(event.getSample());
             }
@@ -135,7 +135,7 @@ public final class ResourceManager extends ComponentDefinition {
         public void handle(TManSample event) {
 
             if (useImprovedSparrow) {
-                //System.out.println("TManSample: " + event.getSample().size());
+                logger.debug("TManSample: " + event.getSample().size());
                 neighbours.clear();
                 neighbours.addAll(event.getSample());
             }
@@ -150,14 +150,13 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(RequestResources.Request event) {
 
-            //System.out.println("####RequestResources.Request####");
             long jobId = event.getJobId();
             boolean successfullyAllocatedResources = availableResources.allocate(jobId);
             RequestResources.Response resp = new RequestResources.Response(self, event.getSource(), successfullyAllocatedResources, jobId);
             trigger(resp, networkPort);
 
             if (successfullyAllocatedResources) {
-                // trigger the timeout for holding the resources
+                // Trigger the timeout for holding the resources
                 ScheduleTimeout timeout = new ScheduleTimeout(event.getTimeToHold());
                 timeout.setTimeoutEvent(new ReleaseAllocatedResources(timeout, event.getNumCpus(), event.getAmountMemInMb()));
                 trigger(timeout, timerPort);
@@ -172,9 +171,9 @@ public final class ResourceManager extends ComponentDefinition {
     Handler<RequestResources.Response> handleResourceAllocationResponse = new Handler<RequestResources.Response>() {
         @Override
         public void handle(RequestResources.Response event) {
-            //System.out.println("handleResourceAllocationResponse");
+
             if (event.isSuccess()) {
-                System.out.println("allocation successful on " + event.getSource());
+                logger.info("Allocation successful on " + event.getSource());
             } else {
                 long jobId = event.getJobId();
                 for (Map.Entry<RequestResource, PendingJob> jobEntry : ongoingJobs.entrySet()) {
@@ -208,7 +207,7 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(Probe.Request request) {
 
-            //System.out.println("Got Probe.Request");
+            logger.debug("Got Probe.Request");
 
             Address requester = request.getSource();
             long jobId = request.getJobId();
@@ -243,7 +242,7 @@ public final class ResourceManager extends ComponentDefinition {
         public void handle(ReleaseReservedResources releaseEvent) {
             long jobId = releaseEvent.getJobId();
             availableResources.releaseReservedResources(jobId);
-            //System.out.println("release reserved resources: " + jobId);
+            logger.debug("Release reserved resources: " + jobId);
         }
     };
 
@@ -254,7 +253,7 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(ReleaseAllocatedResources releaseEvent) {
             availableResources.release(releaseEvent.getNumCpus(), releaseEvent.getMemInMb());
-            System.out.println("Release allocated resources: " + releaseEvent);
+            logger.info("Release allocated resources: " + releaseEvent);
         }
     };
 
@@ -265,7 +264,7 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(Probe.Ack ack) {
 
-            //System.out.println("Got ProbeAck!!!!");
+            logger.debug("Got ProbeAck!!!!");
             long jobId = ack.getJobId();
             for (Map.Entry<RequestResource, PendingJob> jobEntry : ongoingJobs.entrySet()) {
 
@@ -286,7 +285,7 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(Probe.Nack nack) {
 
-            //System.out.println("Got ProbeNack!!!!");
+            logger.debug("Got ProbeNack!!!!");
             long jobId = nack.getJobId();
             Map.Entry<RequestResource, PendingJob> job = null;
             for (Map.Entry<RequestResource, PendingJob> jobEntry : ongoingJobs.entrySet()) {
@@ -312,16 +311,16 @@ public final class ResourceManager extends ComponentDefinition {
 
         switch (responseStatus) {
             case -1: // All Nack
-                //System.out.println(jobId + ": All Nack!!!!");
+                logger.debug(jobId + ": All Nack!!!!");
                 ongoingJobs.remove(requestResource);
                 // No worker acked the probe, try to reschedule the job
                 scheduleJob(requestResource);
                 break;
             case 0: // Not enough responses
-                //System.out.println(jobId + ": Not enough responses!!!!");
+                logger.debug(jobId + ": Not enough responses!!!!");
                 break;
             case 1: // At least one Ack
-                //System.out.println(jobId + ": At least one Ack!!!!");
+                logger.debug(jobId + ": At least one Ack!!!!");
                 Address bestWorker = pendingJob.getBestWorker();
                 int numCpus = requestResource.getNumCpus();
                 int memoryInMbs = requestResource.getMemoryInMbs();
@@ -342,7 +341,7 @@ public final class ResourceManager extends ComponentDefinition {
      */
     private void scheduleJob(RequestResource jobEvent) {
 
-        System.out.println("Allocate resources: " + jobEvent.getNumCpus() + " + " + jobEvent.getMemoryInMbs());
+        logger.info("Allocate resources: " + jobEvent.getNumCpus() + " + " + jobEvent.getMemoryInMbs());
         jobList.add(jobEvent);
 
         long jobId = jobEvent.getId();
@@ -354,8 +353,8 @@ public final class ResourceManager extends ComponentDefinition {
             // Check if job can be executed
             for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
 
-                System.out.println("Neighbour " + i + ": " + neighbours.get(i));
-                //System.out.println("Sending Probe.Request");
+                logger.info("Neighbour " + i + ": " + neighbours.get(i));
+                logger.debug("Sending Probe.Request");
                 PeerDescriptor neighbour = neighbours.get(i);
                 addresses.add(neighbour.getAddress());
 
@@ -366,7 +365,7 @@ public final class ResourceManager extends ComponentDefinition {
             //Collections.shuffle(neighbours);
             for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
 
-                //System.out.println("Sending Probe.Request");
+                logger.debug("Sending Probe.Request");
                 PeerDescriptor neighbour = neighbours.get(i);
                 addresses.add(neighbour.getAddress());
 

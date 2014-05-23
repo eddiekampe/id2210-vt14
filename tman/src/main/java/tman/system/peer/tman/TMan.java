@@ -35,8 +35,8 @@ public final class TMan extends ComponentDefinition {
     Positive<Network> networkPort = positive(Network.class);
     Positive<Timer> timerPort = positive(Timer.class);
     private Address self;
-    private Set<PeerDescriptor> tmanPartners;
-    private Set<PeerDescriptor> cyclonPartners;
+    private List<PeerDescriptor> tmanPartners;
+    private List<PeerDescriptor> cyclonPartners;
     private TManConfiguration tmanConfiguration;
     private Random random;
     private AvailableResources availableResources;
@@ -54,8 +54,8 @@ public final class TMan extends ComponentDefinition {
 
     public TMan() {
 
-        tmanPartners = new HashSet<PeerDescriptor>();
-        cyclonPartners = new HashSet<PeerDescriptor>();
+        tmanPartners = new ArrayList<PeerDescriptor>();
+        cyclonPartners = new ArrayList<PeerDescriptor>();
 
         subscribe(handleInit, control);
         subscribe(handleRound, timerPort);
@@ -101,13 +101,13 @@ public final class TMan extends ComponentDefinition {
             //System.out.println("CyclonSample");
             int numFreeCpus = availableResources.getNumFreeCpus();
             int freeMemInMbs = availableResources.getFreeMemInMbs();
-            Set<PeerDescriptor> buffer;
+            List<PeerDescriptor> buffer;
             cyclonPartners = event.getSample();
 
             Snapshot.updateCyclonPartners(self, new ArrayList<PeerDescriptor>(cyclonPartners));
 
             if (tmanPartners.size() == 0) {
-                tmanPartners = new HashSet<PeerDescriptor>(cyclonPartners);
+                tmanPartners = new ArrayList<PeerDescriptor>(cyclonPartners);
             }
 
             PeerDescriptor q = getSoftMaxAddress(new ArrayList<PeerDescriptor>(tmanPartners));
@@ -133,7 +133,7 @@ public final class TMan extends ComponentDefinition {
             //System.out.println("ExchangeMsg.Request");
             int numFreeCpus = availableResources.getNumFreeCpus();
             int freeMemInMbs = availableResources.getFreeMemInMbs();
-            Set<PeerDescriptor> buffer;
+            List<PeerDescriptor> buffer;
 
             PeerDescriptor myDescriptor = new PeerDescriptor(self, numFreeCpus, freeMemInMbs);
             buffer = merge(tmanPartners, myDescriptor);
@@ -143,7 +143,7 @@ public final class TMan extends ComponentDefinition {
             trigger(message, networkPort);
 
             buffer = merge(event.getBuffer(), tmanPartners);
-            tmanPartners = new HashSet<PeerDescriptor>(buffer);
+            tmanPartners = new ArrayList<PeerDescriptor>(buffer);
         }
     };
 
@@ -153,13 +153,12 @@ public final class TMan extends ComponentDefinition {
         public void handle(ExchangeMsg.Response event) {
 
             //System.out.println("ExchangeMsg.Response");
-            Set<PeerDescriptor> buffer;
+            List<PeerDescriptor> buffer;
             buffer = merge(event.getBuffer(), tmanPartners);
 
             // Sort and keep C highest peers
-            List<PeerDescriptor> sortedPeers = new ArrayList<PeerDescriptor>(buffer);
-            Collections.sort(sortedPeers, new ComparatorByMix());
-            tmanPartners = new HashSet<PeerDescriptor>(sortedPeers.subList(0, Math.min(C, sortedPeers.size())));
+            Collections.sort(buffer, new ComparatorByMix());
+            tmanPartners = new ArrayList<PeerDescriptor>(buffer.subList(0, Math.min(C, buffer.size())));
         }
     };
 
@@ -214,10 +213,18 @@ public final class TMan extends ComponentDefinition {
      * @param p2 Set 2
      * @return Merged Set
      */
-    private Set<PeerDescriptor> merge(Set<PeerDescriptor> p1, Set<PeerDescriptor> p2) {
+    private List<PeerDescriptor> merge(List<PeerDescriptor> p1, List<PeerDescriptor> p2) {
 
-        Set<PeerDescriptor> result = new HashSet<PeerDescriptor>(p1);
-        result.addAll(p2);
+        List<PeerDescriptor> result = new ArrayList<PeerDescriptor>(p1);
+        for (PeerDescriptor pD1 : p1) {
+
+            for (PeerDescriptor pD2 : p2) {
+                if (pD1.equals(pD2) && pD1.getAge() < pD2.getAge()) {
+                    result.remove(pD1);
+                    result.add(pD2);
+                }
+            }
+        }
         return result;
     }
 
@@ -228,10 +235,15 @@ public final class TMan extends ComponentDefinition {
      * @param p2 PeerDescriptor
      * @return Merged Set
      */
-    private Set<PeerDescriptor> merge(Set<PeerDescriptor> p1, PeerDescriptor p2) {
+    private List<PeerDescriptor> merge(List<PeerDescriptor> p1, PeerDescriptor p2) {
 
-        Set<PeerDescriptor> result = new HashSet<PeerDescriptor>(p1);
-        result.add(p2);
-        return result;
+        for (PeerDescriptor peerDescriptor : p1) {
+            if (peerDescriptor.equals(p2) && peerDescriptor.getAge() < p2.getAge()) {
+                p1.remove(peerDescriptor);
+                break;
+            }
+        }
+        p1.add(p2);
+        return new ArrayList<PeerDescriptor>(p1);
     }
 }

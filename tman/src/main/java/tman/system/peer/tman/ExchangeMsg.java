@@ -1,8 +1,6 @@
 package tman.system.peer.tman;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import cyclon.system.peer.cyclon.PeerDescriptor;
 import se.sics.kompics.address.Address;
@@ -16,19 +14,19 @@ public class ExchangeMsg {
 
         private static final long serialVersionUID = 8493601671018888143L;
         private final UUID requestId;
-        private final Set<PeerDescriptor> buffer;
+        private final List<PeerDescriptor> buffer;
 
-        public Request(Address source, Address destination, Set<PeerDescriptor> buffer) {
+        public Request(Address source, Address destination, List<PeerDescriptor> buffer) {
             super(source, destination);
             this.requestId = UUID.randomUUID();
-            this.buffer = new HashSet<PeerDescriptor>(buffer);
+            this.buffer = new ArrayList<PeerDescriptor>(buffer);
         }
 
         public UUID getRequestId() {
             return this.requestId;
         }
         
-        public Set<PeerDescriptor> getBuffer() {
+        public List<PeerDescriptor> getBuffer() {
             return this.buffer;
         }
     }
@@ -37,12 +35,12 @@ public class ExchangeMsg {
 
         private static final long serialVersionUID = -5022051054665787770L;
         private final UUID requestId;
-        private final Set<PeerDescriptor> buffer;
+        private final List<PeerDescriptor> buffer;
 
-        public Response(Address source, Address destination, Set<PeerDescriptor> buffer) {
+        public Response(Address source, Address destination, List<PeerDescriptor> buffer) {
             super(source, destination);
             this.requestId = UUID.randomUUID();
-            this.buffer = new HashSet<PeerDescriptor>(buffer);
+            this.buffer = new ArrayList<PeerDescriptor>(buffer);
         }
 
 
@@ -50,7 +48,7 @@ public class ExchangeMsg {
             return requestId;
         }
 
-        public Set<PeerDescriptor> getBuffer() {
+        public List<PeerDescriptor> getBuffer() {
             return this.buffer;
         }
     }
