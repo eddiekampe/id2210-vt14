@@ -11,19 +11,21 @@ import java.util.Comparator;
  */
 public class ComparatorByMix implements Comparator<PeerDescriptor> {
 
-    public ComparatorByMix() { }
+    public ComparatorByMix() {
+    }
 
     @Override
     public int compare(PeerDescriptor p1, PeerDescriptor p2) {
 
-        assert (p1.getAddress().getId() == p2.getAddress().getId());
+        //assert (p1.getAddress().getId() == p2.getAddress().getId());
         Float v1 = calculateUtility(p1);
         Float v2 = calculateUtility(p2);
-        return v1.compareTo(v2);
+        return v2.compareTo(v1);
     }
 
     /**
      * Calculates a peer's utility value
+     *
      * @param p Peer
      * @return Utility value
      */
@@ -31,6 +33,9 @@ public class ComparatorByMix implements Comparator<PeerDescriptor> {
 
         int numFreeCpus = p.getNumFreeCpus();
         int freeMemoryInMbs = p.getFreeMemoryInMbs();
-        return numFreeCpus + (1 - 1/freeMemoryInMbs);
+        if (freeMemoryInMbs == 0) {
+            freeMemoryInMbs = 1;
+        }
+        return numFreeCpus + (1.0f - 1.0f / freeMemoryInMbs);
     }
 }

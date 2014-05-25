@@ -23,6 +23,7 @@ import tman.system.peer.tman.TManSample;
 import tman.system.peer.tman.TManSamplePort;
 
 import java.util.*;
+import tman.system.peer.tman.ComparatorByMix;
 
 /**
  * Should have some comments here.
@@ -32,8 +33,8 @@ import java.util.*;
 public final class ResourceManager extends ComponentDefinition {
 
     private static final Logger logger = LoggerFactory.getLogger(ResourceManager.class);
-    private static final int nPeersToProbe = 10;
-    private static final int reservedTimeout = 1000;
+    private static final int nPeersToProbe = 2;
+    private static final int reservedTimeout = 2000;
     private static boolean useImprovedSparrow;
 
     Positive<RmPort> indexPort = positive(RmPort.class);
@@ -68,7 +69,7 @@ public final class ResourceManager extends ComponentDefinition {
         subscribe(handleAllocationTimeout, timerPort);
         subscribe(handleProbeAck, networkPort);
         subscribe(handleProbeNack, networkPort);
-
+        subscribe(handleGradientSearch, networkPort);
     }
 
     /**
@@ -93,7 +94,8 @@ public final class ResourceManager extends ComponentDefinition {
     };
 
     /**
-     * Update handler, running periodically based on ResourceManager configuration (RmConfiguration)
+     * Update handler, running periodically based on ResourceManager
+     * configuration (RmConfiguration)
      */
     Handler<UpdateTimeout> handleUpdateTimeout = new Handler<UpdateTimeout>() {
         @Override
@@ -111,8 +113,7 @@ public final class ResourceManager extends ComponentDefinition {
     };
 
     /**
-     * Handle incoming message CyclonSample.
-     * Update list of neighbours
+     * Handle incoming message CyclonSample. Update list of neighbours
      */
     Handler<CyclonSample> handleCyclonSample = new Handler<CyclonSample>() {
         @Override
@@ -127,15 +128,19 @@ public final class ResourceManager extends ComponentDefinition {
     };
 
     /**
-     * Handle incoming message TManSample.
-     * What to do?
+     * Handle incoming message TManSample. What to do?
      */
     Handler<TManSample> handleTManSample = new Handler<TManSample>() {
         @Override
         public void handle(TManSample event) {
 
             if (useImprovedSparrow) {
-                logger.debug("TManSample: " + event.getSample().size());
+                //logger.info("TManSample: " + event.getSample().size());
+                /*for (int i = 0; i < event.getSample().size(); i++) {
+                 logger.info(i + " " + event.getSample().get(i).getAddress().toString() + " ,CPU: "
+                 + event.getSample().get(i).getNumFreeCpus() + " ,MEM: "
+                 + event.getSample().get(i).getFreeMemoryInMbs());
+                 }*/
                 neighbours.clear();
                 neighbours.addAll(event.getSample());
             }
@@ -143,8 +148,8 @@ public final class ResourceManager extends ComponentDefinition {
     };
 
     /**
-     * Handle incoming resource allocation request.
-     * Should we accept the request? Do we have enough resources?
+     * Handle incoming resource allocation request. Should we accept the
+     * request? Do we have enough resources?
      */
     Handler<RequestResources.Request> handleResourceAllocationRequest = new Handler<RequestResources.Request>() {
         @Override
@@ -165,8 +170,8 @@ public final class ResourceManager extends ComponentDefinition {
     };
 
     /**
-     * Handle incoming resource allocation response.
-     * Did we get the requested resources?
+     * Handle incoming resource allocation response. Did we get the requested
+     * resources?
      */
     Handler<RequestResources.Response> handleResourceAllocationResponse = new Handler<RequestResources.Response>() {
         @Override
@@ -181,6 +186,7 @@ public final class ResourceManager extends ComponentDefinition {
                     long ongoingJobId = jobEntry.getKey().getId();
                     if (ongoingJobId == jobId) {
                         ongoingJobs.remove(jobEntry.getKey());
+                        logger.info("Experied ACK: " + event.getSource());
                         scheduleJob(jobEntry.getKey());
                         break;
                     }
@@ -195,13 +201,21 @@ public final class ResourceManager extends ComponentDefinition {
     Handler<RequestResource> handleRequestResource = new Handler<RequestResource>() {
         @Override
         public void handle(RequestResource jobEvent) {
+            logger.info(self + " handleRequestResource Schedule");
             scheduleJob(jobEvent);
         }
     };
 
+    Handler<GradientSearch> handleGradientSearch = new Handler<GradientSearch>() {
+        @Override
+        public void handle(GradientSearch jobEvent) {
+            logger.info(self + " handleGradientSearch Schedule from " + jobEvent.getSource());
+            scheduleJob(jobEvent.getReq());
+        }
+    };
+
     /**
-     * Handle incoming probe request.
-     * Respond with available resources.
+     * Handle incoming probe request. Respond with available resources.
      */
     Handler<Probe.Request> handleProbeRequest = new Handler<Probe.Request>() {
         @Override
@@ -311,16 +325,16 @@ public final class ResourceManager extends ComponentDefinition {
 
         switch (responseStatus) {
             case -1: // All Nack
-                logger.debug(jobId + ": All Nack!!!!");
+                //logger.info(jobId + ": All Nack!!!!");
                 ongoingJobs.remove(requestResource);
                 // No worker acked the probe, try to reschedule the job
                 scheduleJob(requestResource);
                 break;
             case 0: // Not enough responses
-                logger.debug(jobId + ": Not enough responses!!!!");
+                //logger.debug(jobId + ": Not enough responses!!!!");
                 break;
             case 1: // At least one Ack
-                logger.debug(jobId + ": At least one Ack!!!!");
+                //logger.debug(jobId + ": At least one Ack!!!!");
                 Address bestWorker = pendingJob.getBestWorker();
                 int numCpus = requestResource.getNumCpus();
                 int memoryInMbs = requestResource.getMemoryInMbs();
@@ -341,7 +355,7 @@ public final class ResourceManager extends ComponentDefinition {
      */
     private void scheduleJob(RequestResource jobEvent) {
 
-        logger.info("Allocate resources: " + jobEvent.getNumCpus() + " + " + jobEvent.getMemoryInMbs());
+        //logger.info("Allocate resources: " + jobEvent.getNumCpus() + " + " + jobEvent.getMemoryInMbs());
         jobList.add(jobEvent);
 
         long jobId = jobEvent.getId();
@@ -350,19 +364,75 @@ public final class ResourceManager extends ComponentDefinition {
         List<Address> addresses = new LinkedList<Address>();
 
         if (useImprovedSparrow) {
-            // Check if job can be executed
-            for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
+            float ourScore = calculateUtility(availableResources.getNumFreeCpus(), availableResources.getFreeMemInMbs());
+            float score = calculateUtility(numCpus, memoryInMbs);
+            // calculate all neighbours
+            List<Float> scores = new ArrayList();
+            for (int i = 0; i < neighbours.size() - 1; i++) {
+                float num = calculateUtility(neighbours.get(i).getNumFreeCpus(), neighbours.get(i).getFreeMemoryInMbs());
+                if (!scores.contains(num)) {
+                    scores.add(num);
+                }
+            }
+            if (scores.size() > 1) {
+                if (score >= scores.get(0)) {
+                    if (ourScore == scores.get(0)) {
+                        logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" + 
+                                ourScore + "/" + score);
+                    } else {
+                        // forward this job to the top in our neighbours
+                        logger.info(self + ":" + ourScore + " Unsolvable locally, forward to: "
+                                + neighbours.get(0).getAddress() + ": "
+                                + scores.get(0));
+                        GradientSearch gs = new GradientSearch(self, neighbours.get(0).getAddress(), jobEvent);
+                        trigger(gs, networkPort);
+                    }
+                } else {
+                    // probe best suit peers
+                    // logger.info(self + " Solvable locally, probe now " + ourScore);
+                    int tempCount = 0;
+                    for (int i = 0; i < neighbours.size() && tempCount < nPeersToProbe; i++) {
+                        //logger.debug("Sending Probe.Request");
+                        if (score <= calculateUtility(neighbours.get(i).getNumFreeCpus(), neighbours.get(i).getFreeMemoryInMbs())) {
+                            tempCount++;
+                            PeerDescriptor neighbour = neighbours.get(i);
+                            addresses.add(neighbour.getAddress());
+                            //logger.info(self + ": probe to: " + neighbour.getAddress());
+                            Probe.Request request = new Probe.Request(self, neighbour.getAddress(), jobId, numCpus, memoryInMbs);
+                            trigger(request, networkPort);
+                        }
+                    }
+                }
+            } else if (scores.size() == 1) {
 
-                logger.info("Neighbour " + i + ": " + neighbours.get(i));
-                logger.debug("Sending Probe.Request");
-                PeerDescriptor neighbour = neighbours.get(i);
-                addresses.add(neighbour.getAddress());
+                if (scores.get(0) > score || scores.get(0) == ourScore) {
+                    // all equal and larger (exclude us),
+                    // or all busy (including us),
+                    // maybe initial state or all busy, forward it to others
+                    //logger.info("Initial state or too busy" + scores.get(0) + " " + score + " " + ourScore);
+                    int tempCount = 0;
+                    for (int i = 0; i < neighbours.size() && tempCount < nPeersToProbe; i++) {
+                        tempCount++;
+                        PeerDescriptor neighbour = neighbours.get(i);
+                        addresses.add(neighbour.getAddress());
 
-                Probe.Request request = new Probe.Request(self, neighbour.getAddress(), jobId, numCpus, memoryInMbs);
-                trigger(request, networkPort);
+                        Probe.Request request = new Probe.Request(self, neighbour.getAddress(), jobId, numCpus, memoryInMbs);
+                        trigger(request, networkPort);
+                    }
+                } else if (ourScore > score) {
+                    // we are the best in this system maybe?
+                    // trigger it to ourself
+                    logger.info("Im the best!");
+                    Probe.Request request = new Probe.Request(self, self, jobId, numCpus, memoryInMbs);
+                    trigger(request, networkPort);
+                } else {
+                    // 
+                    logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" + 
+                            ourScore + "/" + score);
+                }
             }
         } else {
-            //Collections.shuffle(neighbours);
+            Collections.shuffle(neighbours);
             for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
 
                 logger.debug("Sending Probe.Request");
@@ -375,5 +445,12 @@ public final class ResourceManager extends ComponentDefinition {
         }
 
         ongoingJobs.put(jobEvent, new PendingJob(addresses));
+    }
+
+    public float calculateUtility(int numFreeCpus, int freeMemoryInMbs) {
+        if (freeMemoryInMbs == 0) {
+            freeMemoryInMbs = 1;
+        }
+        return numFreeCpus + (1.0f - 1.0f / freeMemoryInMbs);
     }
 }

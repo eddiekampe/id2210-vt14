@@ -8,6 +8,7 @@ package common.peer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import static se.sics.kompics.Kompics.logger;
 
 /**
  * AvailableResources represent the capacity of a worker.
@@ -75,7 +76,7 @@ public class AvailableResources {
                 return true;
             }
         }
-        System.out.println("AvailableResources: Could not allocate resources, expired");
+        logger.info("AvailableResources: Could not allocate resources, expired");
         return false;
     }
 
