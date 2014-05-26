@@ -1,6 +1,7 @@
 package resourcemanager.system.peer.rm;
 
 import common.configuration.RmConfiguration;
+import common.helper.UtilityHelper;
 import common.peer.AvailableResources;
 import common.simulation.RequestResource;
 import cyclon.system.peer.cyclon.CyclonSample;
@@ -10,20 +11,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.sics.kompics.ComponentDefinition;
 import se.sics.kompics.Handler;
-import se.sics.kompics.Negative;
 import se.sics.kompics.Positive;
 import se.sics.kompics.address.Address;
 import se.sics.kompics.network.Network;
 import se.sics.kompics.timer.SchedulePeriodicTimeout;
 import se.sics.kompics.timer.ScheduleTimeout;
 import se.sics.kompics.timer.Timer;
-import se.sics.kompics.web.Web;
 import system.peer.RmPort;
 import tman.system.peer.tman.TManSample;
 import tman.system.peer.tman.TManSamplePort;
 
 import java.util.*;
-import tman.system.peer.tman.ComparatorByMix;
 
 /**
  * Should have some comments here.
@@ -40,17 +38,16 @@ public final class ResourceManager extends ComponentDefinition {
     Positive<RmPort> indexPort = positive(RmPort.class);
     Positive<Network> networkPort = positive(Network.class);
     Positive<Timer> timerPort = positive(Timer.class);
-    Negative<Web> webPort = negative(Web.class);
     Positive<CyclonSamplePort> cyclonSamplePort = positive(CyclonSamplePort.class);
     Positive<TManSamplePort> tmanPort = positive(TManSamplePort.class);
 
     private Address self;
     private ArrayList<PeerDescriptor> neighbours = new ArrayList<PeerDescriptor>();
-    private Random random;
     private RmConfiguration configuration;
     private AvailableResources availableResources;
     private Map<RequestResource, PendingJob> ongoingJobs;
     private List<RequestResource> jobList;
+    private Random random;
 
     /**
      * Bind handlers to ports.
@@ -60,7 +57,6 @@ public final class ResourceManager extends ComponentDefinition {
         subscribe(handleInit, control);
         subscribe(handleCyclonSample, cyclonSamplePort);
         subscribe(handleRequestResource, indexPort);
-        subscribe(handleUpdateTimeout, timerPort);
         subscribe(handleResourceAllocationRequest, networkPort);
         subscribe(handleResourceAllocationResponse, networkPort);
         subscribe(handleProbeRequest, networkPort);
@@ -70,6 +66,8 @@ public final class ResourceManager extends ComponentDefinition {
         subscribe(handleProbeAck, networkPort);
         subscribe(handleProbeNack, networkPort);
         subscribe(handleGradientSearch, networkPort);
+        subscribe(handleAllocateResourcesRequest, networkPort);
+        subscribe(handleAllocateResourcesResponse, networkPort);
     }
 
     /**
@@ -83,32 +81,14 @@ public final class ResourceManager extends ComponentDefinition {
             self = init.getSelf();
             configuration = init.getConfiguration();
             useImprovedSparrow = configuration.useImprovedSparrow();
-            random = new Random(init.getConfiguration().getSeed());
             availableResources = init.getAvailableResources();
             jobList = new ArrayList<RequestResource>();
+            long seed = init.getConfiguration().getSeed();
+            random = new Random(seed);
             long period = configuration.getPeriod();
             SchedulePeriodicTimeout periodicTimeout = new SchedulePeriodicTimeout(period, period);
             periodicTimeout.setTimeoutEvent(new UpdateTimeout(periodicTimeout));
             trigger(periodicTimeout, timerPort);
-        }
-    };
-
-    /**
-     * Update handler, running periodically based on ResourceManager
-     * configuration (RmConfiguration)
-     */
-    Handler<UpdateTimeout> handleUpdateTimeout = new Handler<UpdateTimeout>() {
-        @Override
-        public void handle(UpdateTimeout event) {
-
-            //System.out.println("handleUpdateTimeout: " + neighbours.size());
-            // pick a random neighbour to ask for index updates from. 
-            // You can change this policy if you want to.
-            // Maybe a gradient neighbour who is closer to the leader?
-            if (neighbours.isEmpty()) {
-                return;
-            }
-            PeerDescriptor dest = neighbours.get(random.nextInt(neighbours.size()));
         }
     };
 
@@ -157,15 +137,14 @@ public final class ResourceManager extends ComponentDefinition {
 
             long jobId = event.getJobId();
             boolean successfullyAllocatedResources = availableResources.allocate(jobId);
-            RequestResources.Response resp = new RequestResources.Response(self, event.getSource(), successfullyAllocatedResources, jobId);
-            trigger(resp, networkPort);
-
             if (successfullyAllocatedResources) {
                 // Trigger the timeout for holding the resources
                 ScheduleTimeout timeout = new ScheduleTimeout(event.getTimeToHold());
                 timeout.setTimeoutEvent(new ReleaseAllocatedResources(timeout, event.getNumCpus(), event.getAmountMemInMb()));
                 trigger(timeout, timerPort);
             }
+            RequestResources.Response resp = new RequestResources.Response(self, event.getSource(), successfullyAllocatedResources, jobId);
+            trigger(resp, networkPort);
         }
     };
 
@@ -180,17 +159,8 @@ public final class ResourceManager extends ComponentDefinition {
             if (event.isSuccess()) {
                 logger.info("Allocation successful on " + event.getSource());
             } else {
-                long jobId = event.getJobId();
-                for (Map.Entry<RequestResource, PendingJob> jobEntry : ongoingJobs.entrySet()) {
-
-                    long ongoingJobId = jobEntry.getKey().getId();
-                    if (ongoingJobId == jobId) {
-                        ongoingJobs.remove(jobEntry.getKey());
-                        logger.info("Experied ACK: " + event.getSource());
-                        scheduleJob(jobEntry.getKey());
-                        break;
-                    }
-                }
+                logger.info("AllocateResources.Response (NACK): " + event.getSource());
+                rescheduleJob(event.getJobId());
             }
         }
     };
@@ -293,7 +263,7 @@ public final class ResourceManager extends ComponentDefinition {
     };
 
     /**
-     * Hnalde the Negative acknowlege message from a worker
+     * Handle the Negative acknowledge message from a worker
      */
     Handler<Probe.Nack> handleProbeNack = new Handler<Probe.Nack>() {
         @Override
@@ -312,6 +282,53 @@ public final class ResourceManager extends ComponentDefinition {
                 }
             }
             handleProbeResponse(job);
+        }
+    };
+
+    /**
+     * Handle AllocateResources.Request
+     * Try to allocate resources, send back response with result
+     */
+    Handler<AllocateResources.Request> handleAllocateResourcesRequest = new Handler<AllocateResources.Request>() {
+
+        @Override
+        public void handle(AllocateResources.Request request) {
+
+            logger.info("Got AllocateResources.Request");
+            long jobId = request.getJobId();
+            Address sender = request.getSource();
+            int numCpus = request.getNumCpus();
+            int amountMemInMb = request.getAmountMemInMb();
+            int timeToHold = request.getTimeToHold();
+
+            boolean allocationWasSuccessful = availableResources.allocateIfAvailable(numCpus, amountMemInMb);
+            if (allocationWasSuccessful) {
+                // Start timer
+                ScheduleTimeout timeout = new ScheduleTimeout(timeToHold);
+                timeout.setTimeoutEvent(new ReleaseAllocatedResources(timeout, numCpus, amountMemInMb));
+                trigger(timeout, timerPort);
+            }
+            AllocateResources.Response response = new AllocateResources.Response(self, sender, jobId, allocationWasSuccessful);
+            trigger(response, networkPort);
+        }
+    };
+
+    /**
+     * Handle AllocateResources.Response
+     * Check whether alloocation was successful or not -> act accordingly
+     */
+    Handler<AllocateResources.Response> handleAllocateResourcesResponse = new Handler<AllocateResources.Response>() {
+
+        @Override
+        public void handle(AllocateResources.Response response) {
+
+            boolean allocationWasSuccessful = response.wasSuccessful();
+            if (allocationWasSuccessful) {
+                logger.info("Allocation successful on " + response.getSource());
+            } else {
+                logger.info("AllocateResources.Response (NACK): " + response.getSource());
+                rescheduleJob(response.getJobId());
+            }
         }
     };
 
@@ -349,6 +366,23 @@ public final class ResourceManager extends ComponentDefinition {
     }
 
     /**
+     * Reschedule job with jobId
+     * @param jobId Id of the job to reschedule
+     */
+    private void rescheduleJob(long jobId) {
+
+        for (Map.Entry<RequestResource, PendingJob> jobEntry : ongoingJobs.entrySet()) {
+
+            long ongoingJobId = jobEntry.getKey().getId();
+            if (ongoingJobId == jobId) {
+                ongoingJobs.remove(jobEntry.getKey());
+                scheduleJob(jobEntry.getKey());
+                break;
+            }
+        }
+    }
+
+    /**
      * Schedules a job
      *
      * @param jobEvent Job event
@@ -361,52 +395,68 @@ public final class ResourceManager extends ComponentDefinition {
         long jobId = jobEvent.getId();
         int memoryInMbs = jobEvent.getMemoryInMbs();
         int numCpus = jobEvent.getNumCpus();
+        int timeToHoldResource = jobEvent.getTimeToHoldResource();
         List<Address> addresses = new LinkedList<Address>();
 
         if (useImprovedSparrow) {
-            float ourScore = calculateUtility(availableResources.getNumFreeCpus(), availableResources.getFreeMemInMbs());
-            float score = calculateUtility(numCpus, memoryInMbs);
-            // calculate all neighbours
+
+            Float ourScore = UtilityHelper.calculateUtility(availableResources.getNumFreeCpus(), availableResources.getFreeMemInMbs());
+            Float jobScore = UtilityHelper.calculateUtility(numCpus, memoryInMbs);
+
+            // Calculate all neighbours
             List<Float> scores = new ArrayList();
-            for (int i = 0; i < neighbours.size() - 1; i++) {
-                float num = calculateUtility(neighbours.get(i).getNumFreeCpus(), neighbours.get(i).getFreeMemoryInMbs());
-                if (!scores.contains(num)) {
-                    scores.add(num);
+            for (int i = 0; i < neighbours.size(); i++) {
+                PeerDescriptor neighbour = neighbours.get(i);
+                Float peerScore = UtilityHelper.calculateUtility(neighbour.getNumFreeCpus(), neighbour.getFreeMemoryInMbs());
+                if (!scores.contains(peerScore)) {
+                    scores.add(peerScore);
                 }
             }
+
             if (scores.size() > 1) {
-                if (score >= scores.get(0)) {
-                    if (ourScore == scores.get(0)) {
-                        logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" + 
-                                ourScore + "/" + score);
+
+                Float bestScore = scores.get(0);
+                if (jobScore >= bestScore) {
+
+                    if (ourScore.equals(bestScore)) {
+                        logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" +
+                                ourScore + "/" + jobScore);
                     } else {
-                        // forward this job to the top in our neighbours
+                        // Forward this job to the top in our neighbours
+                        PeerDescriptor bestNeighbour = neighbours.get(0);
                         logger.info(self + ":" + ourScore + " Unsolvable locally, forward to: "
-                                + neighbours.get(0).getAddress() + ": "
-                                + scores.get(0));
-                        GradientSearch gs = new GradientSearch(self, neighbours.get(0).getAddress(), jobEvent);
+                                + bestNeighbour.getAddress() + ": " + bestScore);
+                        GradientSearch gs = new GradientSearch(self, bestNeighbour.getAddress(), jobEvent);
                         trigger(gs, networkPort);
                     }
-                } else {
-                    // probe best suit peers
-                    // logger.info(self + " Solvable locally, probe now " + ourScore);
-                    int tempCount = 0;
-                    for (int i = 0; i < neighbours.size() && tempCount < nPeersToProbe; i++) {
-                        //logger.debug("Sending Probe.Request");
-                        if (score <= calculateUtility(neighbours.get(i).getNumFreeCpus(), neighbours.get(i).getFreeMemoryInMbs())) {
-                            tempCount++;
-                            PeerDescriptor neighbour = neighbours.get(i);
-                            addresses.add(neighbour.getAddress());
-                            //logger.info(self + ": probe to: " + neighbour.getAddress());
-                            Probe.Request request = new Probe.Request(self, neighbour.getAddress(), jobId, numCpus, memoryInMbs);
-                            trigger(request, networkPort);
-                        }
-                    }
-                }
-            } else if (scores.size() == 1) {
 
-                if (scores.get(0) > score || scores.get(0) == ourScore) {
-                    // all equal and larger (exclude us),
+                } else {
+                    logger.info("Sending AllocateResources.Request");
+                    // Try to allocate resources at best peer
+                    // logger.info(self + " Solvable locally, probe now " + ourScore);
+
+                    // Random peer from top half
+                    /*
+                    for (int i1 = 0; i1 < neighbours.size(); i1++) {
+                        PeerDescriptor neighbour = neighbours.get(i1);
+                        Float utility = UtilityHelper.calculateUtility(neighbour.getNumFreeCpus(), neighbour.getFreeMemoryInMbs());
+                        logger.info("Peer #" + i1 + " = " + utility);
+                    }
+                    */
+
+                    int i = random.nextInt((int) Math.ceil(neighbours.size() / 2));
+
+                    Address dest = neighbours.get(i).getAddress();
+                    addresses.add(dest);
+                    AllocateResources.Request request = new AllocateResources.Request(self, dest, jobId, numCpus, memoryInMbs, timeToHoldResource);
+                    trigger(request, networkPort);
+                }
+
+            } else if (scores.size() == 1) {
+                logger.info("scores.size() == 1");
+                Float bestScore = scores.get(0);
+                if (bestScore > jobScore || bestScore.equals(ourScore)) {
+                    // All equal and larger (exclude us),
                     // or all busy (including us),
                     // maybe initial state or all busy, forward it to others
                     //logger.info("Initial state or too busy" + scores.get(0) + " " + score + " " + ourScore);
@@ -419,7 +469,7 @@ public final class ResourceManager extends ComponentDefinition {
                         Probe.Request request = new Probe.Request(self, neighbour.getAddress(), jobId, numCpus, memoryInMbs);
                         trigger(request, networkPort);
                     }
-                } else if (ourScore > score) {
+                } else if (ourScore > jobScore) {
                     // we are the best in this system maybe?
                     // trigger it to ourself
                     logger.info("Im the best!");
@@ -428,10 +478,13 @@ public final class ResourceManager extends ComponentDefinition {
                 } else {
                     // 
                     logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" + 
-                            ourScore + "/" + score);
+                            ourScore + "/" + jobScore);
                 }
             }
+
         } else {
+
+            // Use basic Sparrow: shuffle neighbors and send probe
             Collections.shuffle(neighbours);
             for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
 
@@ -445,12 +498,5 @@ public final class ResourceManager extends ComponentDefinition {
         }
 
         ongoingJobs.put(jobEvent, new PendingJob(addresses));
-    }
-
-    public float calculateUtility(int numFreeCpus, int freeMemoryInMbs) {
-        if (freeMemoryInMbs == 0) {
-            freeMemoryInMbs = 1;
-        }
-        return numFreeCpus + (1.0f - 1.0f / freeMemoryInMbs);
     }
 }

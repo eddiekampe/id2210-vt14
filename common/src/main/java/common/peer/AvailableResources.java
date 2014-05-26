@@ -23,6 +23,14 @@ public class AvailableResources {
     private final int totalMemory;
     private List<ReservedResources> reservedResources;
 
+    public int getNumFreeCpus() {
+        return numFreeCpus;
+    }
+
+    public int getFreeMemInMbs() {
+        return freeMemInMbs;
+    }
+
     public AvailableResources(int numFreeCpus, int freeMemInMbs) {
         this.numFreeCpus = numFreeCpus;
         this.freeMemInMbs = freeMemInMbs;
@@ -51,6 +59,34 @@ public class AvailableResources {
         if (numFreeCpus - numReservedCpus >= numCpus && freeMemInMbs - freeReservedMemInMbs >= memInMbs) {
 
             reservedResources.add(new ReservedResources(jobId, numCpus, memInMbs));
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    /**
+     * Checks if enough resources is available to execute a job
+     * @param numCpus Number of CPUs required
+     * @param memInMbs Required memory
+     * @return True if resources are available
+     */
+    public synchronized boolean allocateIfAvailable(int numCpus, int memInMbs) {
+
+        int numReservedCpus = 0;
+        int freeReservedMemInMbs = 0;
+
+        for (ReservedResources reservedResource : reservedResources) {
+            numReservedCpus += reservedResource.getNumCpus();
+            freeReservedMemInMbs += reservedResource.getMemInMb();
+        }
+
+        logger.info("Want to allocate " + numCpus + " + " + memInMbs + " from " + (numFreeCpus - numReservedCpus) + " + " + (freeMemInMbs - freeReservedMemInMbs));
+
+        if (numFreeCpus - numReservedCpus >= numCpus && freeMemInMbs - freeReservedMemInMbs >= memInMbs) {
+            numFreeCpus -= numCpus;
+            freeMemInMbs -= memInMbs;
             return true;
         }
         else {
@@ -91,14 +127,6 @@ public class AvailableResources {
         }
         numFreeCpus += numCpus;
         freeMemInMbs += memInMbs;
-    }
-    
-    public int getNumFreeCpus() {
-        return numFreeCpus;
-    }
-
-    public int getFreeMemInMbs() {
-        return freeMemInMbs;
     }
 
     /**
