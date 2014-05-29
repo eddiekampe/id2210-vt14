@@ -89,6 +89,7 @@ public final class TMan extends ComponentDefinition {
             //System.out.println("TManSchedule");
             Snapshot.updateTManPartners(self, tmanPartners);
             // Publish sample to connected components
+            tmanPartners = new ArrayList<PeerDescriptor>(tmanPartners.subList(0, Math.min(C, tmanPartners.size())));
             trigger(new TManSample(tmanPartners), tmanPort);
         }
     };
