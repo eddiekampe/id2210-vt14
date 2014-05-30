@@ -9,7 +9,7 @@ public class Scenario1 extends Scenario {
     int scenario = 1;
     if (scenario == 1) {
       /**
-       * Scenario1 100 peers 750 jobs
+       * Scenario1 100 peers 790 jobs
        * Peer (8, 12000)
        * Job  (1, 1000)
        */
@@ -23,7 +23,7 @@ public class Scenario1 extends Scenario {
 
       StochasticProcess process1 = new StochasticProcess() {{
               eventInterArrivalTime(constant(100));
-              raise(750, Operations.requestResources(),
+              raise(790, Operations.requestResources(),
                       uniform(0, Integer.MAX_VALUE),
                       constant(1), constant(1000),
                       constant(10000 * 60 * 1)

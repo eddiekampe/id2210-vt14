@@ -28,7 +28,7 @@ import tman.simulator.snapshot.Snapshot;
 public final class TMan extends ComponentDefinition {
 
     private static final Logger logger = LoggerFactory.getLogger(TMan.class);
-    private static final int C = 8;
+    private static final int C = 12;
 
     Negative<TManSamplePort> tmanPort = negative(TManSamplePort.class);
     Positive<CyclonSamplePort> cyclonSamplePort = positive(CyclonSamplePort.class);
@@ -122,7 +122,7 @@ public final class TMan extends ComponentDefinition {
             // It could happen that no peer is available at the moment
             if (q != null) {
 
-                PeerDescriptor myDescriptor = new PeerDescriptor(self, numFreeCpus, freeMemInMbs);
+                PeerDescriptor myDescriptor = new PeerDescriptor(self, numFreeCpus, freeMemInMbs, System.currentTimeMillis());
                 buffer = merge(tmanPartners, myDescriptor);
                 buffer = merge(buffer, cyclonPartners);
                 /*for (int i = 0; i < tmanPartners.size(); i++) {
@@ -153,7 +153,7 @@ public final class TMan extends ComponentDefinition {
             int freeMemInMbs = availableResources.getFreeMemInMbs();
             List<PeerDescriptor> buffer;
 
-            PeerDescriptor myDescriptor = new PeerDescriptor(self, numFreeCpus, freeMemInMbs);
+            PeerDescriptor myDescriptor = new PeerDescriptor(self, numFreeCpus, freeMemInMbs, System.currentTimeMillis());
             buffer = merge(tmanPartners, myDescriptor);
             buffer = merge(buffer, cyclonPartners);
             // sort everytime we send out our view
@@ -240,31 +240,42 @@ public final class TMan extends ComponentDefinition {
      * @param p2 Set 2
      * @return Merged Set
      */
-    private LinkedList<PeerDescriptor> merge(List<PeerDescriptor> p1, List<PeerDescriptor> p2) {
+    private List<PeerDescriptor> merge(List<PeerDescriptor> p1, List<PeerDescriptor> p2) {
 
-        LinkedList<PeerDescriptor> result = new LinkedList<PeerDescriptor>(p1);
+        List<PeerDescriptor> duplicates = new LinkedList<PeerDescriptor>(p1);
+        List<PeerDescriptor> result = new LinkedList<PeerDescriptor>();
+        /*
+        logger.info("-----------------------------------");
+        for (int i = 0; i < p1.size(); i++) {
+            logger.info("P1 before merge: " + p1.get(i));
+        }
+        for (int i = 0; i < p2.size(); i++) {
+            logger.info("P 2 before merge: " + p2.get(i));
+        }
+        */
+        // Keep only duplicates
+        duplicates.retainAll(p2);
+        // Add descriptors to result
+        for (PeerDescriptor pd1 : p1) {
 
-        /*for (int i = 0; i < p1.size(); i++) {
-         logger.info(self + " P1before set merge: " + p1.get(i).getAddress() + p1.get(i).getNumFreeCpus());
-         }
-         for (int i = 0; i < p2.size(); i++) {
-         logger.info(self + " P2before set merge: " + p2.get(i).getAddress() + p2.get(i).getNumFreeCpus());
-         }*/
-        for (PeerDescriptor pD2 : p2) {
-            // find and delete duplicated nodes in p1
-
-            for (int index = 0; index < result.size(); index++) {
-                if (result.get(index).getAddress().equals(pD2.getAddress())) {
-                    result.remove(index);
-                    break;
+            if (duplicates.contains(pd1)) {
+                // Decide which to keep
+                PeerDescriptor pd2 = p2.get(p2.indexOf(pd1));
+                if (pd1.compareTo(pd2) > 0) {
+                    result.add(pd1);
+                } else {
+                    result.add(pd2);
                 }
+            } else {
+                result.add(pd1);
             }
-            result.add(pD2);
         }
         /*
-         for (int i = 0; i < result.size(); i++) {
-         logger.info(self + " set merge: " + result.get(i).getAddress() + result.get(i).getNumFreeCpus());
-         }*/
+        for (int i = 0; i < result.size(); i++) {
+            logger.info("Result set: " + result.get(i));
+        }
+        logger.info("-----------------------------------");
+        */
         return result;
     }
 
@@ -275,21 +286,35 @@ public final class TMan extends ComponentDefinition {
      * @param p2 PeerDescriptor
      * @return Merged Set
      */
-    private LinkedList<PeerDescriptor> merge(List<PeerDescriptor> p1, PeerDescriptor p2) {
-        /*for (int i = 0; i < p1.size(); i++) {
-         logger.info(self + " before single merge: " + p1.get(i).getAddress() + p1.get(i).getNumFreeCpus());
-         }*/
-        LinkedList<PeerDescriptor> result = new LinkedList<PeerDescriptor>(p1);
-        for (PeerDescriptor peerDescriptor : p1) {
-            if (peerDescriptor.getAddress().equals(p2.getAddress())) {
-                result.remove(peerDescriptor);
-                break;
-            }
+    private List<PeerDescriptor> merge(List<PeerDescriptor> p1, PeerDescriptor p2) {
+
+        /*
+        logger.info("-----------------------------------");
+        for (int i = 0; i < p1.size(); i++) {
+            logger.info("P1 before merge: " + p1.get(i));
         }
-        result.add(p2);
-        /*for (int i = 0; i < result.size(); i++) {
-         logger.info(self + " single merge: " + result.get(i).getAddress() + result.get(i).getNumFreeCpus());
-         }*/
-        return result;
+        logger.info("P2: " + p2);
+        */
+        // Basic case, p2 not in p1
+        if (!p1.contains(p2)) {
+            p1.add(p2);
+            return p1;
+        }
+
+        // P2 already in P1, check which one to keep
+        PeerDescriptor pd1 = p1.get(p1.indexOf(p2));
+        if (pd1.compareTo(p2) > 0) {
+
+        } else {
+            p1.remove(pd1);
+            p1.add(p2);
+        }
+        /*
+        for (int i = 0; i < p1.size(); i++) {
+            logger.info("After single merge: " + p1.get(i));
+        }
+        logger.info("-----------------------------------");
+        */
+        return p1;
     }
 }

@@ -404,14 +404,14 @@ public final class ResourceManager extends ComponentDefinition {
             Float jobScore = UtilityHelper.calculateUtility(numCpus, memoryInMbs);
 
             // Calculate all neighbours
-            List<Float> scores = new ArrayList();
+            List<Float> scores = new ArrayList<Float>();
             for (int i = 0; i < neighbours.size(); i++) {
                 PeerDescriptor neighbour = neighbours.get(i);
                 Float peerScore = UtilityHelper.calculateUtility(neighbour.getNumFreeCpus(), neighbour.getFreeMemoryInMbs());
                 if (!scores.contains(peerScore)) {
                     scores.add(peerScore);
                 }
-                //logger.info("Peer#" + i + " score: " + peerScore);
+                //logger.info("Peer #" + i + " (" + neighbour + ")" + " = " + peerScore);
             }
 
             if (scores.size() > 1) {
@@ -437,14 +437,6 @@ public final class ResourceManager extends ComponentDefinition {
                     // logger.info(self + " Solvable locally, probe now " + ourScore);
 
                     // Random peer from top half
-                    /*
-                    for (int i1 = 0; i1 < neighbours.size(); i1++) {
-                        PeerDescriptor neighbour = neighbours.get(i1);
-                        Float utility = UtilityHelper.calculateUtility(neighbour.getNumFreeCpus(), neighbour.getFreeMemoryInMbs());
-                        logger.info("Peer #" + i1 + " = " + utility);
-                    }
-                    */
-
                     int i = 0;//random.nextInt((int) Math.ceil(neighbours.size() / 2));
 
                     Address dest = neighbours.get(i).getAddress();
@@ -461,16 +453,16 @@ public final class ResourceManager extends ComponentDefinition {
                     // or all busy (including us),
                     // maybe initial state or all busy, forward it to others
                     //logger.info("Initial state or too busy" + scores.get(0) + " " + score + " " + ourScore);
-                  int i = 0;//random.nextInt((int) Math.ceil(neighbours.size() / 2));
-                  logger.info("FLat gradient: " + jobScore + " -> " + numCpus + ", " + memoryInMbs);
-                  Address dest = neighbours.get(i).getAddress();
-                  addresses.add(dest);
-                  AllocateResources.Request request = new AllocateResources.Request(self, dest, jobId, numCpus, memoryInMbs, timeToHoldResource);
-                  trigger(request, networkPort);
+                    int i = random.nextInt((int) Math.ceil(neighbours.size() / 2));
+                    logger.info("Flat gradient: " + jobScore + " -> " + numCpus + ", " + memoryInMbs);
+                    Address dest = neighbours.get(i).getAddress();
+                    addresses.add(dest);
+                    AllocateResources.Request request = new AllocateResources.Request(self, dest, jobId, numCpus, memoryInMbs, timeToHoldResource);
+                    trigger(request, networkPort);
 
                 } else if (ourScore > jobScore) {
                     // we are the best in this system maybe?
-                    // trigger it to ourself
+                    // trigger it to ourselves
                     logger.info("Im the best!");
                     Probe.Request request = new Probe.Request(self, self, jobId, numCpus, memoryInMbs);
                     trigger(request, networkPort);

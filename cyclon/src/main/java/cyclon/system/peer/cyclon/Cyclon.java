@@ -103,7 +103,7 @@ public final class Cyclon extends ComponentDefinition {
 
 		// send the random view to a random peer
 		ArrayList<PeerDescriptor> randomDescriptors = cache.selectToSendAtActive(shuffleSize - 1, randomPeer);
-		randomDescriptors.add(new PeerDescriptor(self, availableResources.getNumFreeCpus(), availableResources.getFreeMemInMbs()));
+		randomDescriptors.add(new PeerDescriptor(self, availableResources.getNumFreeCpus(), availableResources.getFreeMemInMbs(), System.currentTimeMillis()));
 		DescriptorBuffer randomBuffer = new DescriptorBuffer(self, randomDescriptors);
 		
 		ScheduleTimeout rst = new ScheduleTimeout(shuffleTimeout);
