@@ -1,36 +1,37 @@
 package tman.simulator.snapshot;
 
+import cyclon.system.peer.cyclon.PeerDescriptor;
+
 import java.util.ArrayList;
-import se.sics.kompics.address.Address;
 
 
 public class PeerInfo {
-	private ArrayList<Address> tmanPartners;
-	private ArrayList<Address> cyclonPartners;
+	private ArrayList<PeerDescriptor> tmanPartners;
+	private ArrayList<PeerDescriptor> cyclonPartners;
 
 
 	public PeerInfo() {
-		this.tmanPartners = new ArrayList<Address>();
-		this.cyclonPartners = new ArrayList<Address>();
+		this.tmanPartners = new ArrayList<PeerDescriptor>();
+		this.cyclonPartners = new ArrayList<PeerDescriptor>();
 	}
 
 
-	public void updateTManPartners(ArrayList<Address> partners) {
+	public void updateTManPartners(ArrayList<PeerDescriptor> partners) {
 		this.tmanPartners = partners;
 	}
 
 
-	public void updateCyclonPartners(ArrayList<Address> partners) {
+	public void updateCyclonPartners(ArrayList<PeerDescriptor> partners) {
 		this.cyclonPartners = partners;
 	}
 
 
-	public ArrayList<Address> getTManPartners() {
+	public ArrayList<PeerDescriptor> getTManPartners() {
 		return this.tmanPartners;
 	}
 
 
-	public ArrayList<Address> getCyclonPartners() {
+	public ArrayList<PeerDescriptor> getCyclonPartners() {
 		return this.cyclonPartners;
 	}
 }

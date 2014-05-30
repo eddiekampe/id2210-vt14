@@ -12,8 +12,7 @@ public class DescriptorBuffer implements Serializable {
 	private final ArrayList<PeerDescriptor> descriptors;
 
 
-	public DescriptorBuffer(Address from,
-			ArrayList<PeerDescriptor> descriptors) {
+	public DescriptorBuffer(Address from, ArrayList<PeerDescriptor> descriptors) {
 		super();
 		this.from = from;
 		this.descriptors = descriptors;

@@ -1,25 +1,31 @@
 package cyclon.system.peer.cyclon;
 
-import java.util.ArrayList;
-
-
 import se.sics.kompics.Event;
 import se.sics.kompics.address.Address;
 
+import java.util.ArrayList;
+import java.util.List;
+
 
 public class CyclonSample extends Event {
-	ArrayList<Address> nodes = new ArrayList<Address>();
 
+    private List<PeerDescriptor> nodes = new ArrayList<PeerDescriptor>();
 
-	public CyclonSample(ArrayList<Address> nodes) {
-		this.nodes = nodes;
-	}
-        
-	public CyclonSample() {
+	public CyclonSample(List<PeerDescriptor> nodes) {
+		this.nodes = new ArrayList<PeerDescriptor>(nodes);
 	}
 
+	public CyclonSample() { }
 
-	public ArrayList<Address> getSample() {
+	public List<PeerDescriptor> getSample() {
 		return this.nodes;
 	}
+
+    public ArrayList<Address> getAddressSample() {
+        ArrayList<Address> partners = new ArrayList<Address>();
+        for (PeerDescriptor node : nodes) {
+            partners.add(node.getAddress());
+        }
+        return partners;
+    }
 }

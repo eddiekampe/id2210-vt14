@@ -68,6 +68,7 @@ public final class DataCenterSimulator extends ComponentDefinition {
     }
 	
     Handler<SimulatorInit> handleInit = new Handler<SimulatorInit>() {
+
         @Override
         public void handle(SimulatorInit init) {
             peers.clear();
@@ -84,20 +85,21 @@ public final class DataCenterSimulator extends ComponentDefinition {
             SchedulePeriodicTimeout spt = new SchedulePeriodicTimeout(snapshotPeriod, snapshotPeriod);
             spt.setTimeoutEvent(new GenerateReport(spt));
             trigger(spt, timer);
-
         }
     };
         
     Handler<RequestResource> handleRequestResource = new Handler<RequestResource>() {
+
         @Override
         public void handle(RequestResource event) {
             Long successor = ringNodes.getNode(event.getId());
             Component peer = peers.get(successor);
-            trigger( event, peer.getNegative(RmPort.class));
+            trigger(event, peer.getNegative(RmPort.class));
         }
     };
 	
     Handler<PeerJoin> handlePeerJoin = new Handler<PeerJoin>() {
+
         @Override
         public void handle(PeerJoin event) {
             Long id = event.getPeerId();
@@ -117,6 +119,7 @@ public final class DataCenterSimulator extends ComponentDefinition {
     };
 	
     Handler<PeerFail> handlePeerFail = new Handler<PeerFail>() {
+
         @Override
         public void handle(PeerFail event) {
             Long id = ringNodes.getNode(event.getId());
@@ -132,17 +135,20 @@ public final class DataCenterSimulator extends ComponentDefinition {
     };
 	
     Handler<TerminateExperiment> handleTerminateExperiment = new Handler<TerminateExperiment>() {
+
         @Override
         public void handle(TerminateExperiment event) {
             System.err.println("Finishing experiment - terminating....");
+            Snapshot.report();
             System.exit(0);
         }
     };
     
     Handler<GenerateReport> handleGenerateReport = new Handler<GenerateReport>() {
+
         @Override
         public void handle(GenerateReport event) {
-            Snapshot.report();
+            Snapshot.report_periodically();
         }
     };
 
@@ -156,7 +162,7 @@ public final class DataCenterSimulator extends ComponentDefinition {
         connect(timer, peer.getNegative(Timer.class));
         
         AvailableResources ar = new AvailableResources(numCpus, memInMb);
-        trigger(new PeerInit(address, bootstrapConfiguration, cyclonConfiguration, 
+        trigger(new PeerInit(address, bootstrapConfiguration, cyclonConfiguration, tmanConfiguration,
                 rmConfiguration, ar), peer.getControl());
 
         trigger(new Start(), peer.getControl());

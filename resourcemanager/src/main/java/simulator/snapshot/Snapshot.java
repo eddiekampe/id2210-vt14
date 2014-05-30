@@ -1,16 +1,17 @@
 package simulator.snapshot;
 
 import common.peer.AvailableResources;
-import java.util.ArrayList;
+
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import se.sics.kompics.address.Address;
 
 public class Snapshot {
 
-    private static ConcurrentHashMap<Address, PeerInfo> peers = 
-            new ConcurrentHashMap<Address, PeerInfo>();
+    private static ConcurrentHashMap<Address, PeerInfo> peers = new ConcurrentHashMap<Address, PeerInfo>();
     private static int counter = 0;
     private static String FILENAME = "search.out";
+    private static ConcurrentHashMap<Long, JobTime> jobTracker = new ConcurrentHashMap<Long, JobTime>();
 
 
     public static void init(int numOfStripes) {
@@ -39,9 +40,73 @@ public class Snapshot {
         peerInfo.setNeighbours(partners);
     }
 
+    /**
+     * Each peer reports in when it schedules a job
+     * @param jobId Id of the job
+     * @param time Time
+     */
+    public static void reportJobScheduleTime(long jobId, long time) {
+        jobTracker.put(jobId, new JobTime(time));
+    }
+
+    /**
+     * Each peer reports in when it allocates a job
+     * @param jobId Id of the job
+     * @param time Time
+     */
+    public static void reportJobAllocationTime(long jobId, long time) {
+        JobTime jobTime = jobTracker.get(jobId);
+        jobTime.setEndTime(time);
+        jobTracker.put(jobId, jobTime);
+    }
+
+    /**
+     * Report average time for task to complete
+     */
+    private static String reportTime() {
+
+        long bestSoFar = 999999999;
+        long worstSoFar = -1;
+        long sum = 0;
+
+        String str = "Time report" + "\n";
+        str += "-----------------------\n";
+
+        List<JobTime> jobTimes = new ArrayList<JobTime>(jobTracker.values());
+        Collections.sort(jobTimes);
+
+        for (JobTime jobTime : jobTimes) {
+            long finalTime = jobTime.getFinalTime();
+            long startTime = jobTime.getStartTime();
+            sum += finalTime;
+
+            if (finalTime < bestSoFar) {
+                bestSoFar = finalTime;
+            }
+            if (finalTime > worstSoFar) {
+                worstSoFar = finalTime;
+            }
+            str += startTime + ":" + finalTime + "\n";
+        }
+
+        str += "-----------------------\n";
+        str += "Best: " + bestSoFar + "\n";
+        str += "Worst: " + worstSoFar + "\n";
+        str += "\n";
+        str +="Average: " + (sum / jobTracker.size()) + "\n";
+        str += "-----------------------\n";
+        return str;
+    }
 
     public static void report() {
-        String str = new String();
+
+        String str = reportTime();
+        System.out.println(str);
+        FileIO.append(str, FILENAME);
+    }
+
+    public static void report_periodically() {
+        String str = "";
         str += "current time: " + counter++ + "\n";
         str += reportNetworkState();
         str += reportDetails();
@@ -50,7 +115,6 @@ public class Snapshot {
         System.out.println(str);
         FileIO.append(str, FILENAME);
     }
-
 
     private static String reportNetworkState() {
         String str = "---\n";

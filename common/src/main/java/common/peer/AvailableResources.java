@@ -8,6 +8,7 @@ package common.peer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import static se.sics.kompics.Kompics.logger;
 
 /**
  * AvailableResources represent the capacity of a worker.
@@ -21,6 +22,14 @@ public class AvailableResources {
     private final int totalCpus;
     private final int totalMemory;
     private List<ReservedResources> reservedResources;
+
+    public int getNumFreeCpus() {
+        return numFreeCpus;
+    }
+
+    public int getFreeMemInMbs() {
+        return freeMemInMbs;
+    }
 
     public AvailableResources(int numFreeCpus, int freeMemInMbs) {
         this.numFreeCpus = numFreeCpus;
@@ -58,6 +67,34 @@ public class AvailableResources {
     }
 
     /**
+     * Checks if enough resources is available to execute a job
+     * @param numCpus Number of CPUs required
+     * @param memInMbs Required memory
+     * @return True if resources are available
+     */
+    public synchronized boolean allocateIfAvailable(int numCpus, int memInMbs) {
+
+        int numReservedCpus = 0;
+        int freeReservedMemInMbs = 0;
+
+        for (ReservedResources reservedResource : reservedResources) {
+            numReservedCpus += reservedResource.getNumCpus();
+            freeReservedMemInMbs += reservedResource.getMemInMb();
+        }
+
+        logger.debug("Want to allocate " + numCpus + " + " + memInMbs + " from " + (numFreeCpus - numReservedCpus) + " + " + (freeMemInMbs - freeReservedMemInMbs));
+
+        if (numFreeCpus - numReservedCpus >= numCpus && freeMemInMbs - freeReservedMemInMbs >= memInMbs) {
+            numFreeCpus -= numCpus;
+            freeMemInMbs -= memInMbs;
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    /**
      * Allocates CPU and memory
      * @param jobId Id of the reserved job
      * @return True if resources is successfully allocated
@@ -75,7 +112,7 @@ public class AvailableResources {
                 return true;
             }
         }
-        System.out.println("AvailableResources: Could not allocate resources, expired");
+        logger.info("AvailableResources: Could not allocate resources, expired");
         return false;
     }
 
@@ -90,14 +127,6 @@ public class AvailableResources {
         }
         numFreeCpus += numCpus;
         freeMemInMbs += memInMbs;
-    }
-    
-    public int getNumFreeCpus() {
-        return numFreeCpus;
-    }
-
-    public int getFreeMemInMbs() {
-        return freeMemInMbs;
     }
 
     /**
