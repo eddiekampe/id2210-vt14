@@ -28,7 +28,9 @@ public class Main {
         Configuration configuration = new Configuration(seed, useImprovedSparrow);
 
         //Scenario scenario = new Scenario1();
-        Scenario scenario = new IncreasingNumberOfPeersScenario();
+        //Scenario scenario = new IncreasingNumberOfPeersScenario();
+        Scenario scenario = new HighLoadScenario();
+
         scenario.setSeed(seed);
         scenario.getScenario().simulate(DataCenterSimulationMain.class);
     }
