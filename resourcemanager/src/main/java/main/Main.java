@@ -1,5 +1,7 @@
 package main;
 
+import common.simulation.scenarios.HighLoadScenario;
+import common.simulation.scenarios.IncreasingNumberOfPeersScenario;
 import simulator.core.DataCenterSimulationMain;
 import common.configuration.Configuration;
 import common.simulation.scenarios.Scenario;
@@ -21,11 +23,12 @@ public class Main {
          *  Set whether to use improved version of Sparrow or not
          */
         long seed = 333; //System.currentTimeMillis();
-        boolean useImprovedSparrow = true;
+        boolean useImprovedSparrow = false;
 
         Configuration configuration = new Configuration(seed, useImprovedSparrow);
 
-        Scenario scenario = new Scenario1();
+        //Scenario scenario = new Scenario1();
+        Scenario scenario = new IncreasingNumberOfPeersScenario();
         scenario.setSeed(seed);
         scenario.getScenario().simulate(DataCenterSimulationMain.class);
     }

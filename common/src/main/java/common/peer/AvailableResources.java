@@ -82,7 +82,7 @@ public class AvailableResources {
             freeReservedMemInMbs += reservedResource.getMemInMb();
         }
 
-        logger.info("Want to allocate " + numCpus + " + " + memInMbs + " from " + (numFreeCpus - numReservedCpus) + " + " + (freeMemInMbs - freeReservedMemInMbs));
+        logger.debug("Want to allocate " + numCpus + " + " + memInMbs + " from " + (numFreeCpus - numReservedCpus) + " + " + (freeMemInMbs - freeReservedMemInMbs));
 
         if (numFreeCpus - numReservedCpus >= numCpus && freeMemInMbs - freeReservedMemInMbs >= memInMbs) {
             numFreeCpus -= numCpus;

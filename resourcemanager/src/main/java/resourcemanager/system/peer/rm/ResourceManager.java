@@ -17,6 +17,7 @@ import se.sics.kompics.network.Network;
 import se.sics.kompics.timer.SchedulePeriodicTimeout;
 import se.sics.kompics.timer.ScheduleTimeout;
 import se.sics.kompics.timer.Timer;
+import simulator.snapshot.Snapshot;
 import system.peer.RmPort;
 import tman.system.peer.tman.TManSample;
 import tman.system.peer.tman.TManSamplePort;
@@ -160,9 +161,10 @@ public final class ResourceManager extends ComponentDefinition {
         public void handle(RequestResources.Response event) {
 
             if (event.isSuccess()) {
+                Snapshot.reportJobAllocationTime(event.getJobId(), System.currentTimeMillis());
                 logger.info("Allocation successful on " + event.getSource() + "for " + event.getJobId());
             } else {
-                logger.info("AllocateResources.Response (NACK) from: " + event.getSource());
+                logger.debug("AllocateResources.Response (NACK) from: " + event.getSource());
                 rescheduleJob(event.getJobId());
             }
         }
@@ -175,6 +177,8 @@ public final class ResourceManager extends ComponentDefinition {
 
         @Override
         public void handle(RequestResource jobEvent) {
+            // Report scheduling start time
+            Snapshot.reportJobScheduleTime(jobEvent.getId(), System.currentTimeMillis());
             logger.info(self + " - Scheduling job: " + jobEvent.getId());
             scheduleJob(jobEvent);
         }
@@ -343,9 +347,10 @@ public final class ResourceManager extends ComponentDefinition {
 
             boolean allocationWasSuccessful = response.wasSuccessful();
             if (allocationWasSuccessful) {
+                Snapshot.reportJobAllocationTime(response.getJobId(), System.currentTimeMillis());
                 logger.info("Allocation successful on " + response.getSource() + "for " + response.getJobId());
             } else {
-                logger.info("AllocateResources.Response (NACK) from: " + response.getSource());
+                logger.debug("AllocateResources.Response (NACK) from: " + response.getSource());
                 rescheduleJob(response.getJobId());
             }
         }
@@ -493,7 +498,7 @@ public final class ResourceManager extends ComponentDefinition {
                     Probe.Request request = new Probe.Request(self, self, jobId, numCpus, memoryInMbs);
                     trigger(request, networkPort);
                 } else {
-                    logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" + 
+                    logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" +
                             ourScore + "/" + jobScore);
                 }
             }
