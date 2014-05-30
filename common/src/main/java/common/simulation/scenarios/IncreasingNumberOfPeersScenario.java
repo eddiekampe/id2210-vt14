@@ -21,7 +21,7 @@ public class IncreasingNumberOfPeersScenario extends Scenario {
         // Ask for more resources than available in total
         StochasticProcess process1 = new StochasticProcess() {{
             eventInterArrivalTime(constant(100));
-            raise(120, Operations.requestResources(),
+            raise(150, Operations.requestResources(),
                 uniform(0, Integer.MAX_VALUE),
                 constant(2), constant(2000),
                 constant(10000 * 60 * 1)
@@ -40,7 +40,7 @@ public class IncreasingNumberOfPeersScenario extends Scenario {
         // Ask for more resources after new peers
         StochasticProcess process3 = new StochasticProcess() {{
             eventInterArrivalTime(constant(100));
-            raise(50, Operations.requestResources(),
+            raise(75, Operations.requestResources(),
                 uniform(0, Integer.MAX_VALUE),
                 constant(2), constant(2000),
                 constant(10000 * 60 * 1)
@@ -55,11 +55,11 @@ public class IncreasingNumberOfPeersScenario extends Scenario {
         // Start out with 50 peers
         process0.start();
         // Ask for more resources than available in total
-        process1.startAfterTerminationOf(1000, process0);
+        process1.startAfterTerminationOf(2000, process0);
         // Add additional 50 peers
-        process2.startAfterTerminationOf(1000, process1);
-        process3.startAfterTerminationOf(1000, process2);
-        terminateProcess.startAfterTerminationOf(100000, process3);
+        process2.startAfterTerminationOf(2000, process1);
+        process3.startAfterTerminationOf(2000, process2);
+        terminateProcess.startAfterTerminationOf(50000, process3);
     }};
 
     public IncreasingNumberOfPeersScenario() {
