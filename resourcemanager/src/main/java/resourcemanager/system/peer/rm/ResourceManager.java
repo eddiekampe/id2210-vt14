@@ -31,6 +31,9 @@ import java.util.*;
 public final class ResourceManager extends ComponentDefinition {
 
     private static final Logger logger = LoggerFactory.getLogger(ResourceManager.class);
+    /**
+     * Number of peers to probe
+     */
     private static final int nPeersToProbe = 2;
     private static final int reservedTimeout = 2000;
     private static boolean useImprovedSparrow;
@@ -74,6 +77,7 @@ public final class ResourceManager extends ComponentDefinition {
      * Initialize ResourceManager
      */
     Handler<RmInit> handleInit = new Handler<RmInit>() {
+
         @Override
         public void handle(RmInit init) {
 
@@ -96,6 +100,7 @@ public final class ResourceManager extends ComponentDefinition {
      * Handle incoming message CyclonSample. Update list of neighbours
      */
     Handler<CyclonSample> handleCyclonSample = new Handler<CyclonSample>() {
+
         @Override
         public void handle(CyclonSample event) {
 
@@ -111,16 +116,12 @@ public final class ResourceManager extends ComponentDefinition {
      * Handle incoming message TManSample. What to do?
      */
     Handler<TManSample> handleTManSample = new Handler<TManSample>() {
+
         @Override
         public void handle(TManSample event) {
 
             if (useImprovedSparrow) {
-                //logger.info("TManSample: " + event.getSample().size());
-                /*for (int i = 0; i < event.getSample().size(); i++) {
-                 logger.info(i + " " + event.getSample().get(i).getAddress().toString() + " ,CPU: "
-                 + event.getSample().get(i).getNumFreeCpus() + " ,MEM: "
-                 + event.getSample().get(i).getFreeMemoryInMbs());
-                 }*/
+                logger.debug("TManSample: " + event.getSample().size());
                 neighbours.clear();
                 neighbours.addAll(event.getSample());
             }
@@ -132,6 +133,7 @@ public final class ResourceManager extends ComponentDefinition {
      * request? Do we have enough resources?
      */
     Handler<RequestResources.Request> handleResourceAllocationRequest = new Handler<RequestResources.Request>() {
+
         @Override
         public void handle(RequestResources.Request event) {
 
@@ -153,13 +155,14 @@ public final class ResourceManager extends ComponentDefinition {
      * resources?
      */
     Handler<RequestResources.Response> handleResourceAllocationResponse = new Handler<RequestResources.Response>() {
+
         @Override
         public void handle(RequestResources.Response event) {
 
             if (event.isSuccess()) {
                 logger.info("Allocation successful on " + event.getSource() + "for " + event.getJobId());
             } else {
-                logger.info("AllocateResources.Response (NACK): " + event.getSource());
+                logger.info("AllocateResources.Response (NACK) from: " + event.getSource());
                 rescheduleJob(event.getJobId());
             }
         }
@@ -169,14 +172,19 @@ public final class ResourceManager extends ComponentDefinition {
      * Schedule incoming resource request.
      */
     Handler<RequestResource> handleRequestResource = new Handler<RequestResource>() {
+
         @Override
         public void handle(RequestResource jobEvent) {
-            logger.info(self + " handleRequestResource Schedule: " + jobEvent.getId());
+            logger.info(self + " - Scheduling job: " + jobEvent.getId());
             scheduleJob(jobEvent);
         }
     };
 
+    /**
+     * Sender could not schedule job, it was forwarded to us because we were closer to the center of the gradient
+     */
     Handler<GradientSearch> handleGradientSearch = new Handler<GradientSearch>() {
+
         @Override
         public void handle(GradientSearch jobEvent) {
             logger.info(self + " handleGradientSearch Schedule from " + jobEvent.getSource());
@@ -188,6 +196,7 @@ public final class ResourceManager extends ComponentDefinition {
      * Handle incoming probe request. Respond with available resources.
      */
     Handler<Probe.Request> handleProbeRequest = new Handler<Probe.Request>() {
+
         @Override
         public void handle(Probe.Request request) {
 
@@ -198,10 +207,11 @@ public final class ResourceManager extends ComponentDefinition {
             int numCpus = request.getNumCpus();
             int amountMemInMb = request.getAmountMemInMb();
 
+            // Try to reserve resources
             boolean resourcesAreAvailable = availableResources.reserveIfAvailable(jobId, numCpus, amountMemInMb);
 
             if (resourcesAreAvailable) {
-                // ACK
+                // Send ACK
                 ScheduleTimeout timeout = new ScheduleTimeout(reservedTimeout);
                 timeout.setTimeoutEvent(new ReleaseReservedResources(timeout, jobId, numCpus, amountMemInMb));
                 trigger(timeout, timerPort);
@@ -210,7 +220,7 @@ public final class ResourceManager extends ComponentDefinition {
                 trigger(response, networkPort);
 
             } else {
-                // NACK
+                // Send NACK
                 Probe.Nack response = new Probe.Nack(self, requester, jobId);
                 trigger(response, networkPort);
             }
@@ -224,6 +234,7 @@ public final class ResourceManager extends ComponentDefinition {
 
         @Override
         public void handle(ReleaseReservedResources releaseEvent) {
+
             long jobId = releaseEvent.getJobId();
             availableResources.releaseReservedResources(jobId);
             logger.debug("Release reserved resources: " + jobId);
@@ -234,6 +245,7 @@ public final class ResourceManager extends ComponentDefinition {
      * Handles the timeout of a reserved resource
      */
     Handler<ReleaseAllocatedResources> handleAllocationTimeout = new Handler<ReleaseAllocatedResources>() {
+
         @Override
         public void handle(ReleaseAllocatedResources releaseEvent) {
             availableResources.release(releaseEvent.getNumCpus(), releaseEvent.getMemInMb());
@@ -245,17 +257,20 @@ public final class ResourceManager extends ComponentDefinition {
      * Handle the Acknowledge message from a worker
      */
     Handler<Probe.Ack> handleProbeAck = new Handler<Probe.Ack>() {
+
         @Override
         public void handle(Probe.Ack ack) {
 
-            logger.debug("Got ProbeAck!!!!");
+            logger.debug("Got ProbeAck!");
             long jobId = ack.getJobId();
+            // Find the jobEntry corresponding to the jobId
             for (Map.Entry<RequestResource, PendingJob> jobEntry : ongoingJobs.entrySet()) {
 
                 long ongoingJobId = jobEntry.getKey().getId();
                 if (ongoingJobId == jobId) {
                     PendingJob pendingJob = jobEntry.getValue();
                     pendingJob.addAck(ack.getSource());
+                    // Handle the probe response
                     handleProbeResponse(jobEntry);
                 }
             }
@@ -266,12 +281,14 @@ public final class ResourceManager extends ComponentDefinition {
      * Handle the Negative acknowledge message from a worker
      */
     Handler<Probe.Nack> handleProbeNack = new Handler<Probe.Nack>() {
+
         @Override
         public void handle(Probe.Nack nack) {
 
             logger.debug("Got ProbeNack!!!!");
             long jobId = nack.getJobId();
             Map.Entry<RequestResource, PendingJob> job = null;
+            // Find the jobEntry corresponding to the jobId
             for (Map.Entry<RequestResource, PendingJob> jobEntry : ongoingJobs.entrySet()) {
 
                 long ongoingJobId = jobEntry.getKey().getId();
@@ -281,6 +298,7 @@ public final class ResourceManager extends ComponentDefinition {
                     job = jobEntry;
                 }
             }
+            // Handle the probe response
             handleProbeResponse(job);
         }
     };
@@ -294,7 +312,8 @@ public final class ResourceManager extends ComponentDefinition {
         @Override
         public void handle(AllocateResources.Request request) {
 
-            logger.info("Got AllocateResources.Request");
+            logger.debug("Got AllocateResources.Request");
+
             long jobId = request.getJobId();
             Address sender = request.getSource();
             int numCpus = request.getNumCpus();
@@ -326,12 +345,22 @@ public final class ResourceManager extends ComponentDefinition {
             if (allocationWasSuccessful) {
                 logger.info("Allocation successful on " + response.getSource() + "for " + response.getJobId());
             } else {
-                logger.info("AllocateResources.Response (NACK): " + response.getSource());
+                logger.info("AllocateResources.Response (NACK) from: " + response.getSource());
                 rescheduleJob(response.getJobId());
             }
         }
     };
 
+    /**
+     * Handle probe response
+     * There exists three cases
+     *
+     * 1: We got back all Nacks
+     * 2: We didn't get back all responses yet
+     * 3: Got all responses and at least one Ack
+     *
+     * @param jobEntry Affected job
+     */
     private void handleProbeResponse(Map.Entry<RequestResource, PendingJob> jobEntry) {
 
         PendingJob pendingJob = jobEntry.getValue();
@@ -342,21 +371,19 @@ public final class ResourceManager extends ComponentDefinition {
 
         switch (responseStatus) {
             case -1: // All Nack
-                //logger.info(jobId + ": All Nack!!!!");
                 ongoingJobs.remove(requestResource);
                 // No worker acked the probe, try to reschedule the job
                 scheduleJob(requestResource);
                 break;
             case 0: // Not enough responses
-                //logger.debug(jobId + ": Not enough responses!!!!");
+                // Do nothing
                 break;
             case 1: // At least one Ack
-                //logger.debug(jobId + ": At least one Ack!!!!");
                 Address bestWorker = pendingJob.getBestWorker();
                 int numCpus = requestResource.getNumCpus();
                 int memoryInMbs = requestResource.getMemoryInMbs();
                 int timeToHold = requestResource.getTimeToHoldResource();
-
+                // Send out a request for resources to the bestWorker
                 RequestResources.Request request = new RequestResources.Request(self, bestWorker, jobId, numCpus, memoryInMbs, timeToHold);
                 trigger(request, networkPort);
                 break;
@@ -389,7 +416,6 @@ public final class ResourceManager extends ComponentDefinition {
      */
     private void scheduleJob(RequestResource jobEvent) {
 
-        //logger.info("Allocate resources: " + jobEvent.getNumCpus() + " + " + jobEvent.getMemoryInMbs());
         jobList.add(jobEvent);
 
         long jobId = jobEvent.getId();
@@ -403,7 +429,7 @@ public final class ResourceManager extends ComponentDefinition {
             Float ourScore = UtilityHelper.calculateUtility(availableResources.getNumFreeCpus(), availableResources.getFreeMemInMbs());
             Float jobScore = UtilityHelper.calculateUtility(numCpus, memoryInMbs);
 
-            // Calculate all neighbours
+            // Calculate scores for all neighbours
             List<Float> scores = new ArrayList<Float>();
             for (int i = 0; i < neighbours.size(); i++) {
                 PeerDescriptor neighbour = neighbours.get(i);
@@ -415,7 +441,7 @@ public final class ResourceManager extends ComponentDefinition {
             }
 
             if (scores.size() > 1) {
-
+                // There exists at least two different scores among our neighbours
                 Float bestScore = scores.get(0);
                 if (jobScore >= bestScore) {
 
@@ -432,12 +458,10 @@ public final class ResourceManager extends ComponentDefinition {
                     }
 
                 } else {
-                    logger.info("Sending AllocateResources.Request");
-                    // Try to allocate resources at best peer
-                    // logger.info(self + " Solvable locally, probe now " + ourScore);
 
-                    // Random peer from top half
-                    int i = 0;//random.nextInt((int) Math.ceil(neighbours.size() / 2));
+                    logger.debug("Sending AllocateResources.Request");
+                    // Try to allocate resources at best peer
+                    int i = 0;
 
                     Address dest = neighbours.get(i).getAddress();
                     addresses.add(dest);
@@ -446,28 +470,29 @@ public final class ResourceManager extends ComponentDefinition {
                 }
 
             } else if (scores.size() == 1) {
-                //logger.info("scores.size() == 1");
+                // All peers in the gradient got the same utility
                 Float bestScore = scores.get(0);
                 if (bestScore > jobScore || bestScore.equals(ourScore)) {
-                    // All equal and larger (exclude us),
-                    // or all busy (including us),
+
+                    // All equal and larger (exclude us), or all busy (including us),
                     // maybe initial state or all busy, forward it to others
-                    //logger.info("Initial state or too busy" + scores.get(0) + " " + score + " " + ourScore);
+                    logger.debug("Flat gradient: " + jobScore + " -> " + numCpus + ", " + memoryInMbs);
+
+                    // Pick a peer from the upper half
                     int i = random.nextInt((int) Math.ceil(neighbours.size() / 2));
-                    logger.info("Flat gradient: " + jobScore + " -> " + numCpus + ", " + memoryInMbs);
                     Address dest = neighbours.get(i).getAddress();
                     addresses.add(dest);
                     AllocateResources.Request request = new AllocateResources.Request(self, dest, jobId, numCpus, memoryInMbs, timeToHoldResource);
                     trigger(request, networkPort);
 
                 } else if (ourScore > jobScore) {
-                    // we are the best in this system maybe?
+
+                    // We are the best in this system maybe?
                     // trigger it to ourselves
                     logger.info("Im the best!");
                     Probe.Request request = new Probe.Request(self, self, jobId, numCpus, memoryInMbs);
                     trigger(request, networkPort);
                 } else {
-                    // 
                     logger.info("Sorry, based on our local knowledge, we're the best unsolvable node, drop task" + 
                             ourScore + "/" + jobScore);
                 }
@@ -477,9 +502,6 @@ public final class ResourceManager extends ComponentDefinition {
 
             // Use basic Sparrow: shuffle neighbors and send probe
             Collections.shuffle(neighbours);
-            if (neighbours.size() == 0) {
-                logger.info("Neighbour size 0: " + self);
-            }
             for (int i = 0; i < neighbours.size() && i < nPeersToProbe; i++) {
 
                 logger.debug("Sending Probe.Request");

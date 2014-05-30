@@ -64,6 +64,9 @@ public final class TMan extends ComponentDefinition {
         subscribe(handleTManPartnersRequest, networkPort);
     }
 
+    /**
+     * Initialize TMan
+     */
     Handler<TManInit> handleInit = new Handler<TManInit>() {
 
         @Override
@@ -81,12 +84,15 @@ public final class TMan extends ComponentDefinition {
         }
     };
 
+    /**
+     * Push updates frequently to any TManSample handler
+     * Make sure to not exceed C number of neighbours
+     */
     Handler<TManSchedule> handleRound = new Handler<TManSchedule>() {
 
         @Override
         public void handle(TManSchedule event) {
 
-            //System.out.println("TManSchedule");
             Snapshot.updateTManPartners(self, tmanPartners);
             // Publish sample to connected components
             tmanPartners = new ArrayList<PeerDescriptor>(tmanPartners.subList(0, Math.min(C, tmanPartners.size())));
@@ -94,48 +100,37 @@ public final class TMan extends ComponentDefinition {
         }
     };
 
+    /**
+     * Handle CyclonSample event
+     * Merge new sample data into tmanPartners
+     */
     Handler<CyclonSample> handleCyclonSample = new Handler<CyclonSample>() {
 
         @Override
         public void handle(CyclonSample event) {
+
             int numFreeCpus = availableResources.getNumFreeCpus();
             int freeMemInMbs = availableResources.getFreeMemInMbs();
             List<PeerDescriptor> buffer;
             cyclonPartners = event.getSample();
 
             Snapshot.updateCyclonPartners(self, new ArrayList<PeerDescriptor>(cyclonPartners));
-
-            /*for (int i = 0; i < cyclonPartners.size(); i++) {
-             logger.info(self + " receiving cyclon samples: " + cyclonPartners.get(i).getAddress().toString());
-             }*/
             if (tmanPartners.isEmpty()) {
                 tmanPartners = new ArrayList<PeerDescriptor>(cyclonPartners);
             }
-            /*for (int i = 0; i < tmanPartners.size(); i++) {
-             logger.info(self + " beforeee SoftMax samples: " + tmanPartners.get(i).getAddress().toString());
-             }*/
-            PeerDescriptor q = getSoftMaxAddress(tmanPartners);
-            /*for (int i = 0; i < tmanPartners.size(); i++) {
-             logger.info(self + " SoftMax samples: " + tmanPartners.get(i).getAddress().toString());
-             }*/
 
+            PeerDescriptor q = getSoftMaxAddress(tmanPartners);
             // It could happen that no peer is available at the moment
             if (q != null) {
 
                 PeerDescriptor myDescriptor = new PeerDescriptor(self, numFreeCpus, freeMemInMbs, System.currentTimeMillis());
                 buffer = merge(tmanPartners, myDescriptor);
                 buffer = merge(buffer, cyclonPartners);
-                /*for (int i = 0; i < tmanPartners.size(); i++) {
-                 logger.info(self + " buffer samples: " + tmanPartners.get(i).getAddress().toString());
-                 }*/
 
                 // Start the exchange between peers
                 if (!self.equals(q.getAddress())) {
-                    // we have to order these nodes if we send it to RM
+                    // We have to order these nodes if we send it to RM
                     Collections.sort(tmanPartners, new ComparatorByMix());
-                    /*for (int i = 0; i < tmanPartners.size(); i++) {
-                     logger.info(self + " request TMAN samples: " + tmanPartners.get(i).getAddress().toString());
-                     }*/
                     ExchangeMsg.Request message = new ExchangeMsg.Request(self, q.getAddress(), buffer);
                     trigger(message, networkPort);
                 }
@@ -143,12 +138,15 @@ public final class TMan extends ComponentDefinition {
         }
     };
 
+    /**
+     * Handle request from TManPartner
+     * Send back response and merge request into local view
+     */
     Handler<ExchangeMsg.Request> handleTManPartnersRequest = new Handler<ExchangeMsg.Request>() {
 
         @Override
         public void handle(ExchangeMsg.Request event) {
 
-            //System.out.println("ExchangeMsg.Request");
             int numFreeCpus = availableResources.getNumFreeCpus();
             int freeMemInMbs = availableResources.getFreeMemInMbs();
             List<PeerDescriptor> buffer;
@@ -156,16 +154,13 @@ public final class TMan extends ComponentDefinition {
             PeerDescriptor myDescriptor = new PeerDescriptor(self, numFreeCpus, freeMemInMbs, System.currentTimeMillis());
             buffer = merge(tmanPartners, myDescriptor);
             buffer = merge(buffer, cyclonPartners);
-            // sort everytime we send out our view
+            // Sort every time we send out our view
             Collections.sort(buffer, new ComparatorByMix());
-            /*for (int i = 0; i < tmanPartners.size(); i++) {
-             logger.info(self + " reply TMAN samples: " + tmanPartners.get(i).getAddress().toString());
-             }*/
             // Send back response
             ExchangeMsg.Response message = new ExchangeMsg.Response(self, event.getSource(), buffer);
             trigger(message, networkPort);
 
-            // merge the received buffer
+            // Merge the received buffer
             buffer = merge(event.getBuffer(), tmanPartners);
             // and sort them
             Collections.sort(buffer, new ComparatorByMix());
@@ -173,12 +168,15 @@ public final class TMan extends ComponentDefinition {
         }
     };
 
+    /**
+     * Handle response from TManPartner
+     * Merge response into local view
+     */
     Handler<ExchangeMsg.Response> handleTManPartnersResponse = new Handler<ExchangeMsg.Response>() {
 
         @Override
         public void handle(ExchangeMsg.Response event) {
 
-            //System.out.println("ExchangeMsg.Response");
             List<PeerDescriptor> buffer;
             buffer = merge(event.getBuffer(), tmanPartners);
 
@@ -187,7 +185,6 @@ public final class TMan extends ComponentDefinition {
             tmanPartners = new ArrayList<PeerDescriptor>(buffer.subList(0, Math.min(C, buffer.size())));
         }
     };
-
 
     /**
      * Return a single node, weighted towards the 'best' node (as defined by
@@ -244,15 +241,7 @@ public final class TMan extends ComponentDefinition {
 
         List<PeerDescriptor> duplicates = new LinkedList<PeerDescriptor>(p1);
         List<PeerDescriptor> result = new LinkedList<PeerDescriptor>();
-        /*
-        logger.info("-----------------------------------");
-        for (int i = 0; i < p1.size(); i++) {
-            logger.info("P1 before merge: " + p1.get(i));
-        }
-        for (int i = 0; i < p2.size(); i++) {
-            logger.info("P 2 before merge: " + p2.get(i));
-        }
-        */
+
         // Keep only duplicates
         duplicates.retainAll(p2);
         // Add descriptors to result
@@ -270,12 +259,6 @@ public final class TMan extends ComponentDefinition {
                 result.add(pd1);
             }
         }
-        /*
-        for (int i = 0; i < result.size(); i++) {
-            logger.info("Result set: " + result.get(i));
-        }
-        logger.info("-----------------------------------");
-        */
         return result;
     }
 
@@ -288,13 +271,6 @@ public final class TMan extends ComponentDefinition {
      */
     private List<PeerDescriptor> merge(List<PeerDescriptor> p1, PeerDescriptor p2) {
 
-        /*
-        logger.info("-----------------------------------");
-        for (int i = 0; i < p1.size(); i++) {
-            logger.info("P1 before merge: " + p1.get(i));
-        }
-        logger.info("P2: " + p2);
-        */
         // Basic case, p2 not in p1
         if (!p1.contains(p2)) {
             p1.add(p2);
@@ -309,12 +285,6 @@ public final class TMan extends ComponentDefinition {
             p1.remove(pd1);
             p1.add(p2);
         }
-        /*
-        for (int i = 0; i < p1.size(); i++) {
-            logger.info("After single merge: " + p1.get(i));
-        }
-        logger.info("-----------------------------------");
-        */
         return p1;
     }
 }
